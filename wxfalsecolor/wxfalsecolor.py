@@ -740,7 +740,7 @@ class ImageFrame(wx.Frame):
         info.Copyright = "(c) 2010 Thomas Bleicher"
         info.Description = "cross-platform GUI frontend for falsecolor"
         info.WebSite = ("http://sites.google.com/site/tbleicher/radiance/wxfalsecolor", "wxfalsecolor home page")
-        info.Developers = ["Thomas Bleicher"]
+        info.Developers = ["Thomas Bleicher", "Axel Jacobs"]
         info.License = wordwrap(LICENSE, 500, wx.ClientDC(self))
         wx.AboutBox(info)
 

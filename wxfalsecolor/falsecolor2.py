@@ -95,7 +95,7 @@ class FalsecolorImage:
         self.data = None
         self.vertical = True    # future flag for horizontal legend
         self.tmpdir = ""
-        self.zerooff = 0.5      # legend offset from zero
+        self.zerooff = 0.5      # half step legend offset from zero
         self._irridiance = False
         self._resolution = (0,0)
 
@@ -103,131 +103,37 @@ class FalsecolorImage:
             self.setOptions(args)
 
     
-    def isIrridiance(self):
-        return self._irridiance
-
-
-    def setOptions(self,args):
-        """check command line args"""
-        if "-d" in args:
-            print >>sys.stderr, "DEBUG parseArgs:", args
-
-        try:
-            while args:
-                
-                if args[0] == '-lw':
-                    option = args.pop(0)
-                    self.legwidth = int(args[0])
-                elif args[0] == '-lh':
-                    option = args.pop(0)
-                    self.legheight = int(args[0])
-                elif args[0] == '-log':
-                    option = args.pop(0)
-                    self.decades = int(args[0])
-                elif args[0] == '-s':
-                    option = args.pop(0)
-                    self.scale = float(args[0])
-                elif args[0] == '-n':
-                    option = args.pop(0)
-                    self.ndivs = int(args[0])
-                    if self.ndivs == 0:
-                        self.error = "illegal argument for '-n': '%s'" % args[0]
-                        break
-                elif args[0] == '-l':
-                    option = args.pop(0)
-                    self.label = args[0]
-
-                elif args[0] == '-spec':
-		    self.redv='old_red(v)'
-		    self.grnv='old_grn(v)'
-		    self.bluv='old_blu(v)'
-                
-                elif args[0] == '-mask':
-                    option = args.pop(0)
-                    self.mask = float(args[0])
-
-                elif args[0] == '-r':
-                    option = args.pop(0)
-                    self.redv = args[0]
-                elif args[0] == '-g':
-                    option = args.pop(0)
-                    self.grnv = args[0]
-                elif args[0] == '-b':
-                    option = args.pop(0)
-                    self.bluv = args[0]
-
-                elif args[0] == '-i':
-                    option = args.pop(0)
-                    if os.path.isfile(args[0]):
-                        self.picture = args[0]
-                    else:
-                        self.error = "no such file: \"%s\"" % args[0]
-                        break
-                elif args[0] == '-p':
-                    option = args.pop(0)
-                    if os.path.isfile(args[0]):
-                        self.cpict = args[0]
-                    else:
-                        self.error = "no such file: \"%s\"" % args[0]
-                        break
-                elif args[0] == '-ip' or args[0] == '-pi':
-                    option = args.pop(0)
-                    if os.path.isfile(args[0]):
-                        self.picture = args[0]
-                        self.cpict = args[0]
-                    else:
-                        self.error = "no such file: \"%s\"" % args[0]
-                        break
-
-                elif args[0] == '-cl':
-                    self.docont = 'a'
-                    self.loff = 12
-                elif args[0] == '-cb':
-                    self.docont = 'b'
-                    self.loff = 13
-
-                elif args[0] == '-m':
-                    option = args.pop(0)
-                    self.mult = float(args[0])
-                
-                elif args[0] == '-t':
-                    option = args.pop(0)
-                    self.tmpdir = args[0]
-                
-                elif args[0] == '-d':
-                    self.DEBUG = True
-                
-                elif args[0] == '-e':
-                    self.doextrem = True
-                    self.needfile = True
-
-                else:
-                    self.error = "bad option \"%s\"" % args[0]
-                    break
-                args.pop(0)
-
-        except ValueError, e:
-            self.error = "bad value for option '%s': '%s'" % (option,args[0])
-            print >>sys.stderr, "ERROR:", self.error
-
-        except IndexError, e:
-            self.error = "missing argument for option '%s'" % option
-            print >>sys.stderr, "ERROR:", self.error
-
+    def applyMask(self):
+        """mask values below self.mask with black"""
+        if self.picture == "-":
+            fd,maskImg = tempfile.mkstemp(suffix=".hdr",dir=self.tmpdir)
+            f = open(maskImg, 'wb')
+            f.write(self._input)
+            f.close()
+        else:
+            maskImg = self.picture
+        mv = self.mask / self.mult
+        args = "-e ro=if(li(2)-%f,ri(1),0);go=if(li(2)-%f,gi(1),0);bo=if(li(2)-%f,bi(1),0);" % (mv,mv,mv)
+        cmd = str("pcomb %s - \"%s\"" % (args, maskImg))
+        if self.DEBUG:
+            print >>sys.stderr, "DEBUG applyMask cmd=", shlex.split(cmd)
+        self.data = self._popenPipeCmd(cmd, self.data)
+        
 
     def cleanup(self):
-        """delete self.tmpdir - handle errors on Windows"""
+        """delete self.tmpdir - throws error on Windows (files still in use)"""
         if self.DEBUG and self.tmpdir != "":
             print >>sys.stderr, "DEBUG keeping tmpdir '%s'" % self.tmpdir
         if self.tmpdir != "":
             try:
                 shutil.rmtree(self.tmpdir)
             except WindowsError,e:
-                print >>sys.stderr, "TEST: falsecolor cleanup():", str(e)
-                #self.error = str(e)
+                if self.DEBUG:
+                    print >>sys.stderr, "DEBUG falsecolor cleanup() error:", str(e)
 
 
     def combineImages(self,scol,slab):
+        """combine color scale, legend and fcimage to new falsecolor image"""
         cmd = "pcompos \"%s\" 0 0 -t .2 \"%s\" 0 %d - %d 0" % (scol,slab,self.loff,self.legwidth)
         self.data = self._popenPipeCmd(cmd, self.data)
         if self.DEBUG:
@@ -238,7 +144,6 @@ class FalsecolorImage:
         """create *.cal files"""
         self._createTmpDir()
         
-        #pc0 = os.path.join(self.tmpdir, 'pc0.cal')
         fd,pc0 = tempfile.mkstemp(suffix=".cal",dir=self.tmpdir)
         f_pc0 = open(pc0, 'w')
         f_pc0.write(TEMPLATE_PC0 % (self.scale, self.mult, self.ndivs, self.redv, self.grnv, self.bluv))
@@ -246,7 +151,6 @@ class FalsecolorImage:
             f_pc0.write("in=iscont%s\n" % self.docont)
         f_pc0.close()
 
-        #pc1 = os.path.join(self.tmpdir, 'pc1.cal')
         fd,pc1 = tempfile.mkstemp(suffix=".cal",dir=self.tmpdir)
         f_pc1 = open(pc1, 'w')
         f_pc1.write(TEMPLATE_PC1)
@@ -279,26 +183,6 @@ class FalsecolorImage:
         return path  
 
 
-    def getPValueLines(self):
-        """run pvalue on self._input to get "x,y,r,g,b" for each pixel"""
-        cmd = "pvalue -o -h -H"
-        if os.name == "nt":
-            path = self._createTempFileFromCmd(cmd, self._input)
-            f = open(path, 'r')
-            text = f.read()
-            f.close()
-        else:
-	    text = self._popenPipeCmd(cmd, self._input)
-
-	if self.error:
-            return False
-        else:
-            return text
-
-
-    def getImageResolution(self):
-        return self._resolution
-
     def createLegend(self):
         """create legend image with psign and return path"""
         sheight = math.floor(self.legheight / self.ndivs + 0.5)
@@ -316,8 +200,10 @@ class FalsecolorImage:
 
         cmd = "psign -s -.15 -cf 1 1 1 -cb 0 0 0 -h %d" % sheight
         path = self._createTempFileFromCmd(cmd, text+"\n")
+        self.legheight = sheight * (len(textlist) - 1)
         if self.DEBUG:
             print >>sys.stderr, "DEBUG legend file='%s'" % path
+            print >>sys.stderr, "DEBUG new legend height='%d'" % self.legheight
         return path
 
 
@@ -344,9 +230,9 @@ class FalsecolorImage:
                 print >>sys.stderr, "DEBUG clearing self.tmpdir='%s'" % self.tmpdir
             try:
 		now = time.time()
-		delta = 86400 # 24 hours
+		delta = 86400   ## 24 hours
 		if self.DEBUG:
-		    delta = 60 # 1 minute
+		    delta = 60  ## 1 minute
 		## walk directory tree and delete files
 	        for root,dirs,files in os.walk(self.tmpdir, topdown=False):
 		    for name in files:
@@ -377,6 +263,7 @@ class FalsecolorImage:
             self.tmpdir = os.path.abspath(self.tmpdir)
 	    self._clearTmpDir()
         elif os.environ.has_key('_MEIPASS2'):
+            ## use pyinstaller temp dir
             self.tmpdir = os.path.join(os.environ['_MEIPASS2'], 'wxfalsecolor')
 	    self._clearTmpDir()
         else:
@@ -400,8 +287,8 @@ class FalsecolorImage:
                 self.applyMask()
             if self.data:
                 if self.legwidth > 20 and self.legheight > 40:
-                    scol = self.createColorScale()
                     slab = self.createLegend()
+                    scol = self.createColorScale()
                     self.combineImages(scol,slab)
                 if self.doextrem is True:
                     self.showExtremes()
@@ -418,23 +305,6 @@ class FalsecolorImage:
                 self.cleanup()
 
 
-    def applyMask(self):
-        """mask values below self.mask with black"""
-        if self.picture == "-":
-            fd,maskImg = tempfile.mkstemp(suffix=".hdr",dir=self.tmpdir)
-            f = open(maskImg, 'wb')
-            f.write(self._input)
-            f.close()
-        else:
-            maskImg = self.picture
-        mv = self.mask / self.mult
-        args = "-e ro=if(li(2)-%f,ri(1),0);go=if(li(2)-%f,gi(1),0);bo=if(li(2)-%f,bi(1),0);" % (mv,mv,mv)
-        cmd = str("pcomb %s - \"%s\"" % (args, maskImg))
-        if self.DEBUG:
-            print >>sys.stderr, "DEBUG applyMask cmd=", shlex.split(cmd)
-        self.data = self._popenPipeCmd(cmd, self.data)
-        
-
     def falsecolor(self, data=""):
         """convert image data to falsecolor image data"""
         if data == "":
@@ -442,6 +312,33 @@ class FalsecolorImage:
         self._createCalFiles()
         cmd = "pcomb %s %s - %s" % (self.pc0args, self.pc1args, self.cpict)
         self.data = self._popenPipeCmd(cmd, data)
+
+
+    def getPValueLines(self):
+        """run pvalue on self._input to get "x,y,r,g,b" for each pixel"""
+        cmd = "pvalue -o -h -H"
+        if os.name == "nt":
+            path = self._createTempFileFromCmd(cmd, self._input)
+            f = open(path, 'r')
+            text = f.read()
+            f.close()
+        else:
+	    text = self._popenPipeCmd(cmd, self._input)
+
+	if self.error:
+            return False
+        else:
+            return text
+
+
+    def getImageResolution(self):
+        """return image size"""
+        return self._resolution
+
+    
+    def isIrridiance(self):
+        """return True if image has irridiance data"""
+        return self._irridiance
 
 
     def _popenPipeCmd(self, cmd, data_in, data_out=PIPE):
@@ -558,6 +455,114 @@ class FalsecolorImage:
             return False
 
         
+    def setOptions(self,args):
+        """check command line args"""
+        if "-d" in args:
+            print >>sys.stderr, "DEBUG parseArgs:", args
+
+        try:
+            while args:
+                
+                if args[0] == '-lw':
+                    option = args.pop(0)
+                    self.legwidth = int(args[0])
+                elif args[0] == '-lh':
+                    option = args.pop(0)
+                    self.legheight = int(args[0])
+                elif args[0] == '-log':
+                    option = args.pop(0)
+                    self.decades = int(args[0])
+                elif args[0] == '-s':
+                    option = args.pop(0)
+                    self.scale = float(args[0])
+                elif args[0] == '-n':
+                    option = args.pop(0)
+                    self.ndivs = int(args[0])
+                    if self.ndivs == 0:
+                        self.error = "illegal argument for '-n': '%s'" % args[0]
+                        break
+                elif args[0] == '-l':
+                    option = args.pop(0)
+                    self.label = args[0]
+
+                elif args[0] == '-spec':
+		    self.redv='old_red(v)'
+		    self.grnv='old_grn(v)'
+		    self.bluv='old_blu(v)'
+                
+                elif args[0] == '-mask':
+                    option = args.pop(0)
+                    self.mask = float(args[0])
+
+                elif args[0] == '-r':
+                    option = args.pop(0)
+                    self.redv = args[0]
+                elif args[0] == '-g':
+                    option = args.pop(0)
+                    self.grnv = args[0]
+                elif args[0] == '-b':
+                    option = args.pop(0)
+                    self.bluv = args[0]
+
+                elif args[0] == '-i':
+                    option = args.pop(0)
+                    if os.path.isfile(args[0]):
+                        self.picture = args[0]
+                    else:
+                        self.error = "no such file: \"%s\"" % args[0]
+                        break
+                elif args[0] == '-p':
+                    option = args.pop(0)
+                    if os.path.isfile(args[0]):
+                        self.cpict = args[0]
+                    else:
+                        self.error = "no such file: \"%s\"" % args[0]
+                        break
+                elif args[0] == '-ip' or args[0] == '-pi':
+                    option = args.pop(0)
+                    if os.path.isfile(args[0]):
+                        self.picture = args[0]
+                        self.cpict = args[0]
+                    else:
+                        self.error = "no such file: \"%s\"" % args[0]
+                        break
+
+                elif args[0] == '-cl':
+                    self.docont = 'a'
+                    self.loff = 12
+                elif args[0] == '-cb':
+                    self.docont = 'b'
+                    self.loff = 13
+
+                elif args[0] == '-m':
+                    option = args.pop(0)
+                    self.mult = float(args[0])
+                
+                elif args[0] == '-t':
+                    option = args.pop(0)
+                    self.tmpdir = args[0]
+                
+                elif args[0] == '-d':
+                    self.DEBUG = True
+                
+                elif args[0] == '-e':
+                    self.doextrem = True
+                    self.needfile = True
+
+                else:
+                    self.error = "bad option \"%s\"" % args[0]
+                    break
+                args.pop(0)
+
+        except ValueError, e:
+            self.error = "bad value for option '%s': '%s'" % (option,args[0])
+            print >>sys.stderr, "ERROR:", self.error
+
+        except IndexError, e:
+            self.error = "missing argument for option '%s'" % option
+            print >>sys.stderr, "ERROR:", self.error
+
+
     def showExtremes(self):
         """create labels for min and max and combine with fc image"""
         cmd = "pextrem -o"

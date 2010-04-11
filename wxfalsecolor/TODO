@@ -2,8 +2,7 @@
 KNOWN ISSUES
 ============
 
-* alignment of legend and color scale is off for larger
-  step numbers
+[none]
 
 
 USABILITY
@@ -19,11 +18,12 @@ FEATURES
 
 * '-z' option for zero-based legend
 
+* background colour option
+
 * advanced legend placement options
   - vertical: left and right (bottom, middle, top)
   - horizontal: top and bottom (left, middle, right)
   
-  -> check legend alignment bug above
   -> create legend class to handle creation of legend hdr
   
 * 'pcond' feature
