@@ -16,7 +16,7 @@ USABILITY
 FEATURES
 ========
 
-* '-z' option for zero-based legend
+falsecolor2:
 
 * background colour option
 
@@ -26,6 +26,11 @@ FEATURES
   
   -> create legend class to handle creation of legend hdr
   
+* new '-cb' feature combined with '-z' (non-continous gradient)
+
+
+wxfalsecolor:
+
 * 'pcond' feature
 
 * show Lux spot readings as labels on image (left mouse click)
