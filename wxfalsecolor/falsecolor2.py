@@ -566,7 +566,8 @@ class FalsecolorImage:
                     self.docont = 'a'
                     self.loff = 12
                 elif args[0] == '-cb':
-                    if self.zerooff == 0:
+                    #if self.zerooff == 0:
+                    if False:
                         print >>sys.stderr, "WARNING: '-cb' option incompatible with '-z'; using '-cl'"
                         self.docont = 'a'
                         self.loff = 12
@@ -591,7 +592,8 @@ class FalsecolorImage:
                 
                 elif args[0] == '-z':
                     self.zerooff = 0.0
-                    if self.docont == 'b':
+                    #if self.docont == 'b':
+                    if False:
                         print >>sys.stderr, "WARNING: '-cb' option incompatible with '-z'; using '-cl'"
                         self.docont = 'a'
                         self.loff = 12

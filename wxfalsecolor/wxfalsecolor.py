@@ -187,7 +187,6 @@ class FalsecolorControlPanel(wx.Panel):
         self.fc_col  = wx.CheckBox(self, wx.ID_ANY, 'old colours')
         self.fc_extr = wx.CheckBox(self, wx.ID_ANY, 'show extremes')
         self.fc_zero = wx.CheckBox(self, wx.ID_ANY, '0 based leg')
-        self.fc_zero.Disable() #XXX
         
         self.legW = wx.TextCtrl(self, wx.ID_ANY, "100", size=(50,-1))
         self.legH = wx.TextCtrl(self, wx.ID_ANY, "200", size=(50,-1))
@@ -285,6 +284,8 @@ class FalsecolorControlPanel(wx.Panel):
             args.append("-spec")
         if self.fc_extr.GetValue():
             args.append("-e")
+        if self.fc_zero.GetValue():
+            args.append("-z")
         if self.legW.GetValue() != "100":
             args.extend(["-lw", self.legW.GetValue()])
         if self.legH.GetValue() != "200":
@@ -444,7 +445,7 @@ class FileDropTarget(wx.FileDropTarget):
     def OnDropFiles(self, x, y, filenames):
         """validate image before passing it on to self.app.loadImage()"""
         path = filenames[0]
-	rgbeImg = RGBEImage(self, ["-d"] + ["-i", path])
+	rgbeImg = RGBEImage(self, ["-i", path])
         rgbeImg.readImageData(path)
         if rgbeImg.error:
             msg = "Error loading image.\nFile: %s\nError: %s" % (path,rgbeImg.error)
@@ -635,7 +636,7 @@ class ImageFrame(wx.Frame):
         self.reset()
         self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
 	#self.rgbeImg = RGBEImage(self, sys.argv[1:] + ["-t", "./tempdir"])
-	self.rgbeImg = RGBEImage(self, ["-d"] + ["-i", path] + args)
+	self.rgbeImg = RGBEImage(self, ["-i", path] + args)
         self.rgbeImg.readImageData(path)
         if self.rgbeImg.error:
             msg = "Error loading image:\n%s" % self.rgbeImg.error
@@ -736,7 +737,7 @@ class ImageFrame(wx.Frame):
         """show dialog with license etc"""
         info = wx.AboutDialogInfo()
         info.Name = "wxfalsecolor"
-        info.Version = "0.0"
+        info.Version = "0.0 $Revision$"
         info.Copyright = "(c) 2010 Thomas Bleicher"
         info.Description = "cross-platform GUI frontend for falsecolor"
         info.WebSite = ("http://sites.google.com/site/tbleicher/radiance/wxfalsecolor", "wxfalsecolor home page")
