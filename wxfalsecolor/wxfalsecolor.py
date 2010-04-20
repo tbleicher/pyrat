@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-LICENSE="""Copyright 2010 Thomas Bleicer. All rights reserved.
+LICENSE="""Copyright 2010 Thomas Bleicher. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
@@ -737,7 +737,7 @@ class ImageFrame(wx.Frame):
         """show dialog with license etc"""
         info = wx.AboutDialogInfo()
         info.Name = "wxfalsecolor"
-        info.Version = "0.0 $Revision$"
+        info.Version = "0.1 (rREV)"     # placeholder for build script 
         info.Copyright = "(c) 2010 Thomas Bleicher"
         info.Description = "cross-platform GUI frontend for falsecolor"
         info.WebSite = ("http://sites.google.com/site/tbleicher/radiance/wxfalsecolor", "wxfalsecolor home page")
