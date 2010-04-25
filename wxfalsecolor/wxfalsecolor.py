@@ -37,6 +37,7 @@ import sys,os
 import cStringIO
 import wx
 import wx.lib.foldpanelbar as fpb
+import wx.lib.buttons as buttons
 from wx.lib.wordwrap import wordwrap
 
 from falsecolor2 import FalsecolorImage
@@ -60,9 +61,9 @@ class RGBEImage(FalsecolorImage):
         if not self.error:
             #TODO: consider legend position
             if self.legendpos.startswith("left"):
-                self.legendoffset = (self.legwidth,0)
+                self.legendoffset = (self.legend.width,0)
             elif self.legendpos.startswith("top"):
-                self.legendoffset = (0,self.legheight)
+                self.legendoffset = (0,self.legend.height)
 
 
     def getRGBAt(self, pos):
@@ -157,6 +158,8 @@ class RGBEImage(FalsecolorImage):
         dlg.Destroy()
     
 
+
+
 class FalsecolorControlPanel(wx.Panel):
 
     def __init__(self, parent, parentapp, *args, **kwargs):
@@ -192,7 +195,8 @@ class FalsecolorControlPanel(wx.Panel):
         self.legH = wx.TextCtrl(self, wx.ID_ANY, "200", size=(50,-1))
         
         ## 'falsecolor' button
-        self.doFCButton = wx.Button(self, wx.ID_ANY, label='falsecolor')
+        #self.doFCButton = wx.Button(self, wx.ID_ANY, label='falsecolor')
+        self.doFCButton = buttons.GenButton(self, wx.ID_ANY, label='falsecolor')
         self.doFCButton.Bind(wx.EVT_LEFT_DOWN, self.doFalsecolor)
         self.doFCButton.Disable()
 
@@ -236,6 +240,7 @@ class FalsecolorControlPanel(wx.Panel):
         self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_mask)
         self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_col)
         self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_extr)
+        self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_zero)
         
         #fcsizer.Add(grid, proportion=1, flag=wx.EXPAND|wx.ALL, border=0)
         #self.SetSizer(fcsizer)
@@ -246,11 +251,13 @@ class FalsecolorControlPanel(wx.Panel):
     def doFalsecolor(self, event):
         if self.parentapp.rgbe2fc(event) == True:
             self._cmdLine = " ".join(self.getFCArgs())
-            self.doFCButton.SetLabel("update")
+            self.doFCButton.SetLabel("update fc")
             self.doFCButton.Disable()
+            self.doFCButton.SetBackgroundColour(wx.WHITE)
         else:
-            self.doFCButton.SetLabel("update")
+            self.doFCButton.SetLabel("update fc")
             self.doFCButton.Enable()
+            self.doFCButton.SetBackgroundColour(wx.RED)
 
 
     def updateFCButton(self, event):
@@ -258,10 +265,12 @@ class FalsecolorControlPanel(wx.Panel):
         if self._cmdLine != "":
             newCmd = " ".join(self.getFCArgs())
             if self._cmdLine != newCmd:
-                self.doFCButton.SetLabel("update")
+                self.doFCButton.SetLabel("update fc")
                 self.doFCButton.Enable()
+                self.doFCButton.SetBackgroundColour(wx.RED)
             else:
                 self.doFCButton.Disable()
+                self.doFCButton.SetBackgroundColour()
     
 
     def getFCArgs(self):
@@ -473,8 +482,9 @@ class ImagePanel(wx.Panel):
     def reportPosition(self, evt):
         """return cursor (x,y) in pixel coords of self.img - (x,y) is 0 based!"""
         x,y = evt.GetPosition()
-        x *= self._scale
-        y *= self._scale
+        if self._scale > 1:
+            x *= self._scale
+            y *= self._scale
         self.parent.showPixelValueAt( (int(x),int(y)) )
         
     
@@ -583,12 +593,12 @@ class ImageFrame(wx.Frame):
 
     def _checkCmdArgs(self, args):
         """convert command line args to use with falsecolor2"""
-        print "TEST: cmd line args:"
-        for i,arg in enumerate(args):
-            print "     ", i, arg
         ## -i <path> is added by loadFile, so remove path and option now
-        if "-i" in args:
-            idx = args.index("-i")
+        if "-i" in args or '-ip' in args:
+            try:
+                idx = args.index("-i")
+            except ValueError:
+                idx = args.index("-ip")
             try:
                 path = args[idx+1]
                 if os.path.isfile(path):
@@ -597,16 +607,14 @@ class ImageFrame(wx.Frame):
             except IndexError:
                 del args[idx]
                 return ("", args)
-        
-        ## path is only argument (drag-n-drop)
-        if len(args) == 1 and os.path.isfile(args[-1]):
-	    path = args.pop()
-	    args = []
-            return (path,args)
-
-        else:
-            return ("", args)
-        
+        ## path is last argument (drag-n-drop and incorrect use)
+        if os.path.isfile(args[-1]):
+            if len(args) == 1 or args[-2] != '-p':
+                path = args.pop()
+                args = []
+                return (path,args)
+        ## if we can't find an input file, don't load stuff
+        return ("", args)
 
 
     def _doButtonLayout(self):
@@ -624,18 +632,18 @@ class ImageFrame(wx.Frame):
         quitbutton.Bind(wx.EVT_LEFT_DOWN,self.onQuit)
         self.panelSizer.Add( quitbutton, proportion=0, flag=wx.EXPAND|wx.ALL|wx.ALIGN_BOTTOM, border=10 )
 
+
     def reset(self):
         self._array = []
         self._arrayTrue = False
         self._showValues = False
         self.controls.enableShowValues()
 
+
     def loadImage(self, path, args=[]):
         """create instance of falsecolor image from <path>"""
-        print "TEST load Image:", path
         self.reset()
         self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-	#self.rgbeImg = RGBEImage(self, sys.argv[1:] + ["-t", "./tempdir"])
 	self.rgbeImg = RGBEImage(self, ["-i", path] + args)
         self.rgbeImg.readImageData(path)
         if self.rgbeImg.error:
@@ -651,7 +659,7 @@ class ImageFrame(wx.Frame):
             if self.rgbeImg.isIrridiance():
                 self.controls.setFCLabel("Lux")
             self.saveButton.Enable()
-            self.controls.enableFC("convert")
+            self.controls.enableFC("convert fc")
         self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
 
 

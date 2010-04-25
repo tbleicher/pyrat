@@ -24,6 +24,8 @@ clip(x) : if(x-1,1,if(x,x,0));
 frac(x) : x - floor(x);
 boundary(a,b) : neq(floor(ndivs*a+delta),floor(ndivs*b+delta));
 
+stepv(x) : floor(x*ndivs)/ndivs;
+
 old_red(x) = 1.6*x - .6;
 old_grn(x) = if(x-.375, 1.6-1.6*x, 8/3*x);
 old_blu(x) = 1 - 8/3*x;
@@ -62,6 +64,8 @@ ro = if(in,clip(%s),ra);
 go = if(in,clip(%s),ga);
 bo = if(in,clip(%s),ba);
 
+vin(x) = x;
+
 """ 
 
 TEMPLATE_PC1 = """
@@ -79,26 +83,429 @@ map(x) = x;
 ra = ri(nfiles);
 ga = gi(nfiles);
 ba = bi(nfiles);
+
 """
 
+class FalsecolorBase:
+    """base class for falsecolor"""
+    
+    def __init__(self):
+        self.DEBUG = False
+        self.tmpdir = ""
+        self._log = []
 
-class FalsecolorImage:
+
+    def _clearTmpDir(self):
+	"""remove old temporary files and re-create directory"""
+        if os.path.isdir(self.tmpdir):
+            self.log("clearing self.tmpdir='%s'" % self.tmpdir)
+            try:
+		now = time.time()
+		delta = 86400   ## 24 hours
+		if self.DEBUG:
+		    delta = 60  ## 1 minute
+		## walk directory tree and delete files
+	        for root,dirs,files in os.walk(self.tmpdir, topdown=False):
+		    for name in files:
+		        p = os.path.join(root, name)
+			if os.stat(p).st_mtime < (now - delta):
+			    self.log("      deleting file '%s'" % p)
+	                    os.remove(p)
+		    for name in dirs:
+		        p = os.path.join(root, name)
+			if os.stat(p).st_mtime < (now - delta):
+			    self.log("      deleting dir '%s'" % p)
+	                    os.rmdir(p)
+	        ## finally recreate self.tmpdir
+		if not os.path.isdir(self.tmpdir):
+		    os.mkdir(self.tmpdir)
+            except OSError, err:
+	        if self.DEBUG:
+                    print >>sys.stderr, "ERROR:", err
+	else:
+	    os.mkdir(self.tmpdir)
+
+
+    def _createTempFileFromCmd(self, cmd, stdin=""):
+        """create tmp file as stdout for <cmd> and return file path"""
+	self._createTmpDir()
+        fd,path = tempfile.mkstemp(suffix=".hdr",dir=self.tmpdir)
+        self.log("temppath='%s'" % path)
+        f = open(path, "wb")
+	try:
+	    data = self._popenPipeCmd(cmd, stdin, f)
+	    if os.name == 'nt':
+	        path = path.replace("\\","\\\\")
+	    return path
+        except OSError:
+            f.close()
+
+
+    def _createTmpDir(self):
+        """create temporary directory"""
+        if self.tmpdir != "":
+            self.tmpdir = os.path.abspath(self.tmpdir)
+	    self._clearTmpDir()
+        elif os.environ.has_key('_MEIPASS2'):
+            ## use pyinstaller temp dir
+            self.tmpdir = os.path.join(os.environ['_MEIPASS2'], 'wxfalsecolor')
+	    self._clearTmpDir()
+        else:
+            self.tmpdir = tempfile.mkdtemp()
+        
+        self.log("self.tmpdir='%s'" % self.tmpdir)
+    
+
+    def getImageSize(self, path):
+        """extract resolution string from image and return (x,y) size"""
+        try:
+            f = open(path, 'rb')
+            data = f.read()
+            f.close()
+            header, bdata = data.split("\n\n")
+            parts = bdata.split("\n")[0].split()
+            return (int(parts[3]),int(parts[1]))
+        except Exception, err:
+            self.log(str(err), True)
+            return False
+
+
+    def log(self, msg, is_error=False):
+        """append <msg> to log and print if DEBUG"""
+        self._log.append(msg)
+        if self.DEBUG or is_error:
+            print >>sys.stderr, msg
+
+
+    def _popenPipeCmd(self, cmd, data_in, data_out=PIPE):
+        """pass <data_in> to process <cmd> and return results"""
+        ## convert cmd to (non-unicode?) string for subprocess
+	cmd = str(cmd)
+        self.log("cmd= %s" % str(shlex.split(cmd)))
+        if data_in:
+            self.log("data_in= %d bytes" % len(data_in))
+	p = Popen(shlex.split(cmd), bufsize=-1, stdin=PIPE, stdout=data_out, stderr=PIPE)
+        data, err = p.communicate(data_in)
+	
+        if err:
+            self.error = err.strip()
+            raise Exception, err.strip()
+        if data:
+            self.log("data_out= %d bytes" % len(data))
+            return data
+
+
+    def showLog(self):
+        """print log out to stderr"""
+        print >>sys.stderr, "\n".join(self._log)
+
+
+
+
+
+class FalsecolorLegend(FalsecolorBase):
+    """legend for falsecolor image"""
+
+    def __init__(self, img, log=None):
+        
+        FalsecolorBase.__init__(self)
+        self._image = img
+        
+        self.resetDefaults()
+        if log == None:
+            self._log = []
+        else:
+            self._log = log
+
+
+    def create(self):
+        """create legend image and return command to combine images"""
+        if self.width < 20 or self.height < 20:
+            return ''
+        path = self.createLegend()
+        legW,legH = self.getImageSize(path) 
+        imgW,imgH = self._image.getImageResolution()
+        
+        ## offset table:     (         legX,          legY, imgX, imgY)
+        if self._within:
+            offsets = {'S' : ((imgW-legW)/2,             0,    0,    0),    
+                       'N' : ((imgW-legW)/2,     imgH-legH,    0,    0),    
+                       'SE': (    imgW-legW,             0,    0,    0),
+                       'NE': (    imgW-legW,     imgH-legH,    0,    0),
+                       'SW': (            0,             0,    0,    0),    
+                       'NW': (            0,     imgH-legH,    0,    0),    
+                       'E' : (    imgW-legW, (imgH-legH)/2,    0,    0),    
+                       'W' : (            0, (imgH-legH)/2,    0,    0),    
+                       'ES': (    imgW-legW,             0,    0,    0),    
+                       'WS': (            0,             0,    0,    0),    
+                       'EN': (    imgW-legW,     imgH-legH,    0,    0),
+                       'WN': (            0,     imgH-legH,    0,    0)}
+        else:
+            offsets = {'S' : ((imgW-legW)/2,             0,    0, legH),    
+                       'N' : ((imgW-legW)/2,          imgH,    0,    0),    
+                       'SE': (         imgW,             0,    0, legH),
+                       'NE': (         imgW,          imgH,    0,    0),
+                       'SW': (            0,             0,    0, legH),    
+                       'NW': (            0,          imgH,    0,    0),    
+                       'E' : (         imgW, (imgH-legH)/2,    0,    0),    
+                       'W' : (            0, (imgH-legH)/2, legW,    0),    
+                       'ES': (         imgW,             0,    0,    0),    
+                       'WS': (            0,             0, legW,    0),    
+                       'EN': (         imgW,     imgH-legH,    0,    0),
+                       'WN': (            0,     imgH-legH, legW,    0)}
+        
+        ## build command line for final pcompos command
+        legX,legY,imgX,imgY = offsets[self.position]
+        cmd = "pcompos -bg %.f %.f %.f" % self.bgcolor 
+        cmd += " - %d %d \"%s\" %d %d" % (imgX,imgY,path,legX,legY)
+        return cmd
+
+
+    def createColorScale(self):
+        """create color gradient image with pcomb and return path"""
+        if self.is_vertical():
+            args = "-e v=y/yres;vleft=v;vright=v;vbelow=(y-1)/yres;vabove=(y+1)/yres;"
+            colheight = self.height
+            colwidth = max(int(self.width*0.3), 25)
+            self._legendOffX = colwidth + 3                         ## x-offset for legend
+            if self.zerooff == 0:
+                self._gradientOffY = int(self._textheight / 2.0)    ## y-offset for gradient
+        else:
+            args = "-e v=x/xres;vleft=(x-1)/xres;vright=(x+1)/xres;vbelow=v;vabove=v;"
+            colwidth = self.width
+            colheight = max(int(self.height*0.5), 25)
+            self._gradientOffY = self.height - colheight
+
+        cmd = "pcomb %s %s -x %d -y %d" % (self.pc0args, args, colwidth, colheight) 
+        path = self._createTempFileFromCmd(cmd)
+        self.log("gradient file='%s'" % path)
+        return path  
+
+        
+    def createLegend(self):
+        """create vertical legend image"""
+        legimg = self.createText()
+        colimg = self.createColorScale()
+        
+        ## combine gradient and legend
+        cmd = "pcompos -bg %.f %.f %.f" % self.bgcolor 
+        cmd += " \"%s\" %d %d" % (colimg, self._gradientOffX, self._gradientOffY)
+        cmd += " \"%s\" %d %d" % (legimg, self._legendOffX,   self._legendOffY)
+        path = self._createTempFileFromCmd(cmd)
+        
+        ## create label
+        fg = "-cf %.f %.f %.f" % self.fgcolor
+        bg = "-cb %.f %.f %.f" % self.bgcolor
+        cmd = "psign -s -.15 %s %s -h %d %s" % (fg,bg,self._textheight,self.label)
+        labimg = self._createTempFileFromCmd(cmd)
+        
+        ## add label at top (vertical) or left (horizontal)
+        labx,laby = self.getImageSize(labimg)
+        legx,legy = self.getImageSize(path)
+        cmd = "pcompos -bg %.f %.f %.f" % self.bgcolor 
+        if self.is_vertical():
+            if not self._within:
+                cmd += " -x %d" % self.width
+            cmd += " \"%s\" %d %d" % (labimg, int((legx-labx)/2.0), legy)
+            cmd += " \"%s\" %d %d" % (  path, 0, 0)
+        else:
+            if not self._within:
+                cmd += " -y %d" % self.height
+            cmd += " \"%s\" %d %d" % (labimg,    0, int((legy-laby)/2.0))
+            cmd += " \"%s\" %d %d" % (  path, labx, 0)
+        path = self._createTempFileFromCmd(cmd)
+        self.log("legend file='%s'" % path)
+        return path  
+        
+
+    def createText(self):
+        """create legend image with psign and return path"""
+        ## legend values
+        textlist = []
+        for i in range(self.steps):
+            if self.decades > 0:
+                x = (self.steps-self.zerooff-i) / self.steps
+                value = self.scale * 10**((x-1)*self.decades)
+            else:
+                value = self.scale * (self.steps - self.zerooff - i) / self.steps
+            textlist.append(self._formatNumber(value))
+        if self.zerooff == 0:
+            textlist.append(self._formatNumber(0))
+        self.log( "legend text: '%s'" % str(textlist) )
+        if self.is_vertical():
+            return self._createTextV(textlist)
+        else:
+            return self._createTextH(textlist)
+        
+
+    def _createTextV(self, textlist):
+        """create vertical legend text with psign"""
+        self._textheight = math.floor(self.height / self.steps)
+        fg = "-cf %.f %.f %.f" % self.fgcolor
+        bg = "-cb %.f %.f %.f" % (0,0,1)
+        bg = "-cb %.f %.f %.f" % self.bgcolor
+        cmd = "psign -s -.15 %s %s -h %d" % (fg,bg,self._textheight)
+        text = "\n".join(textlist)
+        path = self._createTempFileFromCmd(cmd, text+"\n")
+        if self.zerooff == 0:
+            self.height = self._textheight * (len(textlist) - 1)
+        else:
+            self.height = self._textheight * len(textlist)
+        self.log("legend file='%s'" % path)
+        self.log("new legend height='%d'" % self.height)
+        return path
+
+
+    def _createTextH(self, textlist):
+        """create horizontal legend text with psign and pfilt"""
+        textlist.reverse()
+        numbers, max_x = self._createTextHNumbers(textlist, self._textheight)
+
+        ## adjust textheight if number of 
+        if self.zerooff > 0:
+            incr = self.width/len(textlist)
+        else:
+            incr = self.width/(len(textlist)-1)
+        if incr < max_x:
+            textheight = int(self._textheight * (incr / float(max_x)))
+            self.log("adjusting text height for legend: %d" % textheight)
+            numbers, max_x = self._createTextHNumbers(textlist, textheight)
+            self._legendOffY = int((self._textheight-textheight)/float(2))
+        
+        ## get offset for first element
+        if self.zerooff > 0:
+            incr = self.width/len(textlist)
+        else:
+            incr = self.width/(len(textlist)-1)
+            self._gradientOffX = int(incr/2)
+
+        ## create pcompos command to combine images
+        parts = ["pcompos -b %.f %.f %.f" % self.bgcolor]
+        if numbers[0][0]:
+            off_first = int(numbers[0][1]*0.5)
+        else:
+            off_first = 0
+        for i,(path,size_x) in enumerate(numbers):
+            if path:
+                offset = int((i+0.5)*incr - size_x*0.5)
+                parts.append(" \"%s\" %d 0" % (path,offset))
+        path = self._createTempFileFromCmd(" ".join(parts))
+        return path
+
+    
+    def _createTextHNumbers(self, textlist, textheight):
+        fg = "-cf %.f %.f %.f" % self.fgcolor
+        bg = "-cb %.f %.f %.f" % self.bgcolor
+        numbers = []
+        max_x = 0
+        for n in textlist:
+            cmd = "psign -s -.15 %s %s -h %d" % (fg,bg,textheight)
+            path = self._createTempFileFromCmd(cmd, n+"\n")
+            dim = self.getImageSize(path)
+            if dim:
+                numbers.append( (path,dim[0]) )
+                if dim[0] > max_x:
+                    max_x = dim[0]
+            else:
+                numbers.append((None,0)) 
+        return numbers, max_x
+
+    
+    def _formatNumber(self,n):
+        """return number formated based on self.scale"""
+        if int(n) == n:
+            return "%d" % n
+        if float("%.1f" % n) == n:
+            return "%.1f" % n
+        if float("%.2f" % n) == n:
+            return "%.2f" % n
+
+        if self.scale <= 1:
+            return "%.3f" % n
+        elif self.scale <= 10:
+            return "%.2f" % n
+        elif self.scale <= 100:
+            return "%.1f" % n
+        else:
+            return "%d" % n
+
+
+    def is_vertical(self):
+        """return true if legend is vertical"""
+        if self.position.startswith("W") or self.position.startswith("E"):
+            return True
+        else:
+            return False
+
+    def resetDefaults(self):
+        """restore default values for legend"""
+        self.label = "Wh/m2"
+        self.border = 0
+        self.height = 200
+        self.width = 100
+        self.steps = 8
+        self.scale = 1000
+        self.decades = 0
+        self.position = "WS"
+        self.fgcolor = (1,1,1)
+        self.bgcolor = (0,0,0)
+        self.zerooff = 0.5
+        self._textheight = 26
+        self._legendOffX = 0
+        self._legendOffY = 0
+        self._gradientOffX = 0
+        self._gradientOffY = 0
+        self._defaultsize = (True,True)
+        self._within = False
+
+    def setHeight(self, h):
+        """set legend height"""
+        self.height = h
+        self._defaultsize = (self._defaultsize[0], False)
+
+    def setPosition(self, pos):
+        """check <pos> argument and set position"""
+        pos = pos.upper()
+        if pos.startswith('-'):
+            self._within = True
+            pos = pos[1:]
+        if pos in 'WS W WN NW N NE EN E ES SE S SW'.split():
+            self.position = pos
+            if pos.startswith('N') or pos.startswith('S'):
+                if self._defaultsize[0] == True:
+                    self.width = 400
+                if self._defaultsize[1] == True:
+                    self.height = 50
+            return True
+        else:
+            return False
+
+    def setWidth(self, w):
+        """set legend width"""
+        self.width = w
+        self._defaultsize = (False, self._defaultsize[1])
+
+
+
+
+class FalsecolorImage(FalsecolorBase):
     """convert Radiance image to falsecolor and add legend"""
 
     def __init__(self, args=[]):
         """set defaults and parse command line args""" 
-        self.DEBUG = False
-        self._input = ""
+        FalsecolorBase.__init__(self)
+        self.legend = FalsecolorLegend(self)
+        self._input = ''
         self.picture = '-'
         self.cpict = ''
         self.resetDefaults()
 
         self.data = None
         self.vertical = True    # future flag for horizontal legend
-        self.tmpdir = ""
+        self.tmpdir = ''
         self._irridiance = False
-        self._textheight = 26
         self._resolution = (0,0)
+        
 
         if len(args) > 0:
             self.setOptions(args)
@@ -116,29 +523,19 @@ class FalsecolorImage:
         mv = self.mask / self.mult
         args = "-e ro=if(li(2)-%f,ri(1),0);go=if(li(2)-%f,gi(1),0);bo=if(li(2)-%f,bi(1),0);" % (mv,mv,mv)
         cmd = str("pcomb %s - \"%s\"" % (args, maskImg))
-        if self.DEBUG:
-            print >>sys.stderr, "DEBUG applyMask cmd=", shlex.split(cmd)
+        self.log( "applyMask cmd= %s" % str(shlex.split(cmd)) )
         self.data = self._popenPipeCmd(cmd, self.data)
-        
+
 
     def cleanup(self):
         """delete self.tmpdir - throws error on Windows (files still in use)"""
-        if self.DEBUG and self.tmpdir != "":
-            print >>sys.stderr, "DEBUG keeping tmpdir '%s'" % self.tmpdir
         if self.tmpdir != "":
+            if self.DEBUG:
+                self.log("keeping tmpdir '%s'" % self.tmpdir)
             try:
                 shutil.rmtree(self.tmpdir)
             except WindowsError,e:
-                if self.DEBUG:
-                    print >>sys.stderr, "DEBUG falsecolor cleanup() error:", str(e)
-
-
-    def combineImages(self,scol,slab):
-        """combine color scale, legend and fcimage to new falsecolor image"""
-        cmd = "pcompos \"%s\" 0 %d -t .2 \"%s\" %d %d - %d 0" % (scol,self._scoloff,slab,self._slaboff,self.loff,self.legwidth)
-        self.data = self._popenPipeCmd(cmd, self.data)
-        if self.DEBUG:
-            print >>sys.stderr, "DEBUG self.data=%d bytes" % len(self.data)
+                self.log("falsecolor cleanup() error: %s" % str(e))
 
 
     def _createCalFiles(self):
@@ -148,7 +545,11 @@ class FalsecolorImage:
         fd,pc0 = tempfile.mkstemp(suffix=".cal",dir=self.tmpdir)
         f_pc0 = open(pc0, 'w')
         f_pc0.write(TEMPLATE_PC0 % (self.scale, self.mult, self.ndivs, self.zerooff, self.redv, self.grnv, self.bluv))
-        if self.docont != '':
+        if self.docont == 'b':
+            ## create contour bands
+            f_pc0.write("vin(x) = stepv(x);\n")
+        elif self.docont == 'a':
+            ## create contour lines
             f_pc0.write("in=iscont%s\n" % self.docont)
         f_pc0.close()
 
@@ -163,135 +564,12 @@ class FalsecolorImage:
         
         self.pc0args = "-f \"%s\"" % pc0
         self.pc1args = "-f \"%s\"" % pc1
+        self.legend.pc0args = self.pc0args
+        self.legend.pc1args = self.pc1args
     
         if self.cpict == self.picture:
             self.cpict = ''
 
-
-    def createColorScale(self):
-        """create color gradient image with pcomb and return path"""
-        if self.vertical:
-            #TODO: check diff to original
-            args = "-e v=y/yres;vleft=v;vright=v;vbelow=(y-1)/yres;vabove=(y+1)/yres;"
-            #args = "-e v=y/yres;vleft=v;vright=v;vbelow=(y-0.5)/yres;vabove=(y+1.5)/yres;"
-        else:
-            ## for future horizontal legends
-            args = "-e v=x/xres;vleft=(x-1)/xres;vright=(x+1)/xres;vbelow=v;vabove=v;"
-        
-        if self.zerooff == 0:# and self.docont == '':
-            ## zero based and filled -> place gradient and legend side by side
-            colwidth = max(int(self.legwidth*0.3), 25)
-            self.loff = 0                                   ## y-offset for legend
-            self._slaboff = colwidth + 3                    ## x-offset for legend
-            self._scoloff = int(self._textheight / 2.0)     ## y-offset for gradient
-        else:
-            colwidth = self.legwidth
-            self._slaboff = 0   ## x-offset for legend
-            self._scoloff = 0   ## y-offset for gradient
-        cmd = "pcomb %s %s -x %d -y %d" % (self.pc0args, args, colwidth, self.legheight) 
-        path = self._createTempFileFromCmd(cmd)
-        if self.DEBUG:
-            print >>sys.stderr, "DEBUG gradient file='%s'" % path
-        return path  
-
-        
-    def createLegend(self):
-        """create legend image with psign and return path"""
-        self._textheight = math.floor(self.legheight / self.ndivs)
-        textlist = [self.label]
-        
-        ## legend values
-        for i in range(self.ndivs):
-            if self.decades > 0:
-                x = (self.ndivs-self.zerooff-i) / self.ndivs
-                value = self.scale * 10**((x-1)*self.decades)
-            else:
-                value = self.scale * (self.ndivs - self.zerooff - i) / self.ndivs
-            textlist.append(self._formatNumber(value))
-        if self.zerooff == 0:
-            textlist.append(self._formatNumber(0))
-
-        text = "\n".join(textlist)
-        if self.DEBUG:
-            print >>sys.stderr, "DEBUG legend text:", " ".join(text.split())
-
-        cmd = "psign -s -.15 -cf 1 1 1 -cb 0 0 0 -h %d" % self._textheight
-        path = self._createTempFileFromCmd(cmd, text+"\n")
-        if self.zerooff == 0:
-            self.legheight = self._textheight * (len(textlist) - 2)
-        else:
-            self.legheight = self._textheight * (len(textlist) - 1)
-        if self.DEBUG:
-            print >>sys.stderr, "DEBUG legend file='%s'" % path
-            print >>sys.stderr, "DEBUG new legend height='%d'" % self.legheight
-        return path
-
-
-    def _createTempFileFromCmd(self, cmd, stdin=""):
-        """create tmp file as stdout for <cmd> and return file path"""
-	self._createTmpDir()
-        fd,path = tempfile.mkstemp(suffix=".hdr",dir=self.tmpdir)
-        if self.DEBUG:
-            print >>sys.stderr, "DEBUG temppath='%s'" % path
-        f = open(path, "wb")
-	try:
-	    data = self._popenPipeCmd(cmd, stdin, f)
-	    if os.name == 'nt':
-	        path = path.replace("\\","\\\\")
-	    return path
-        except OSError:
-            f.close()
-
-
-    def _clearTmpDir(self):
-	"""remove old temporary files and re-create directory"""
-        if os.path.isdir(self.tmpdir):
-	    if self.DEBUG:
-                print >>sys.stderr, "DEBUG clearing self.tmpdir='%s'" % self.tmpdir
-            try:
-		now = time.time()
-		delta = 86400   ## 24 hours
-		if self.DEBUG:
-		    delta = 60  ## 1 minute
-		## walk directory tree and delete files
-	        for root,dirs,files in os.walk(self.tmpdir, topdown=False):
-		    for name in files:
-		        p = os.path.join(root, name)
-			if os.stat(p).st_mtime < (now - delta):
-			    if self.DEBUG:
-				print >>sys.stderr, "      deleting file '%s'" % p
-	                    os.remove(p)
-		    for name in dirs:
-		        p = os.path.join(root, name)
-			if os.stat(p).st_mtime < (now - delta):
-			    if self.DEBUG:
-				print >>sys.stderr, "      deleting dir '%s'" % p
-	                    os.rmdir(p)
-	        ## finally recreate self.tmpdir
-		if not os.path.isdir(self.tmpdir):
-		    os.mkdir(self.tmpdir)
-            except OSError, err:
-	        if self.DEBUG:
-                    print >>sys.stderr, "DEBUG error:", err
-	else:
-	    os.mkdir(self.tmpdir)
-
-
-    def _createTmpDir(self):
-        """create temporary directory"""
-        if self.tmpdir != "":
-            self.tmpdir = os.path.abspath(self.tmpdir)
-	    self._clearTmpDir()
-        elif os.environ.has_key('_MEIPASS2'):
-            ## use pyinstaller temp dir
-            self.tmpdir = os.path.join(os.environ['_MEIPASS2'], 'wxfalsecolor')
-	    self._clearTmpDir()
-        else:
-            self.tmpdir = tempfile.mkdtemp()
-        
-	if self.DEBUG:
-            print >>sys.stderr, "DEBUG self.tmpdir='%s'" % self.tmpdir
-        
 
     def doFalsecolor(self, keeptmp=False):
         """create part images, combine and store image data in self.data"""
@@ -306,19 +584,22 @@ class FalsecolorImage:
             if self.data and self.mask > 0:
                 self.applyMask()
             if self.data:
-                if self.legwidth > 20 and self.legheight > 40:
-                    slab = self.createLegend()
-                    scol = self.createColorScale()
-                    self.combineImages(scol,slab)
+                cmd = self.legend.create()
+                if cmd != '':
+                    self.data = self._popenPipeCmd(cmd, self.data)
+                    self.log("self.data=%d bytes" % len(self.data))
                 if self.doextrem is True:
                     self.showExtremes()
             else:
                 print >>sys.stderr, "ERROR: no data in falsecolor image"
+                self.showLog()
 
         except Exception, e:
             print >>sys.stderr, "Falsecolor Error:", e
             self.error = str(e)
             traceback.print_exc(file=sys.stderr)
+            if not self.DEBUG:
+                self.showLog()
         
         finally:
             if keeptmp == False and self.DEBUG == False:
@@ -334,20 +615,9 @@ class FalsecolorImage:
         self.data = self._popenPipeCmd(cmd, data)
 
 
-    def _formatNumber(self,n):
-        """return number formated based on self.scale"""
-        if self.scale <= 1:
-            return "%.3f" % n
-        elif self.scale <= 10:
-            return "%.2f" % n
-        elif self.scale <= 100:
-            return "%.1f" % n
-        else:
-            return "%d" % n
-    
-    
     def getPValueLines(self):
         """run pvalue on self._input to get "x,y,r,g,b" for each pixel"""
+        #TODO: test '-df' float format option
         cmd = "pvalue -o -h -H"
         if os.name == "nt":
             path = self._createTempFileFromCmd(cmd, self._input)
@@ -371,26 +641,6 @@ class FalsecolorImage:
     def isIrridiance(self):
         """return True if image has irridiance data"""
         return self._irridiance
-
-
-    def _popenPipeCmd(self, cmd, data_in, data_out=PIPE):
-        """pass <data_in> to process <cmd> and return results"""
-        ## convert cmd to (non-unicode?) string for subprocess
-	cmd = str(cmd)
-        if self.DEBUG:
-            print >>sys.stderr, "DEBUG cmd=", shlex.split(cmd)
-            if data_in:
-                print >>sys.stderr, "DEBUG data_in= %d bytes" % len(data_in)
-	p = Popen(shlex.split(cmd), bufsize=-1, stdin=PIPE, stdout=data_out, stderr=PIPE)
-        data, err = p.communicate(data_in)
-	
-        if err:
-            self.error = err.strip()
-            raise Exception, err.strip()
-        if data:
-            if self.DEBUG:
-                print >>sys.stderr, "DEBUG data_out= %d bytes" % len(data)
-            return data
 
 
     def readImageData(self, picture=''):
@@ -442,20 +692,16 @@ class FalsecolorImage:
         self.scale = 1000
         self.decades = 0
         self.mask = 0
-        self.redv = 'def_red(v)'
-        self.grnv = 'def_grn(v)'
-        self.bluv = 'def_blu(v)'
+        self.redv = 'def_red(vin(v))'
+        self.grnv = 'def_grn(vin(v))'
+        self.bluv = 'def_blu(vin(v))'
         self.ndivs = 8
-        self.legwidth = 100
-        self.legheight = 200
         self.docont = ''
-        self.loff = 0
-        self._slaboff = 0
-        self._scoloff = 0 
         self.doextrem = False
         self.needfile = False
         self.error = ''
         self.zerooff = 0.5      # half step legend offset from zero
+        self.legend.resetDefaults()
 
 
     def saveToTif(self, path, data=''):
@@ -493,37 +739,46 @@ class FalsecolorImage:
     def setOptions(self,args):
         """check command line args"""
         if "-d" in args:
-            print >>sys.stderr, "DEBUG parseArgs:", args
+            self.log("parseArgs: %s" % str(args))
 
         try:
             while args:
-                
                 if args[0] == '-lw':
                     option = args.pop(0)
-                    self.legwidth = int(args[0])
+                    self.legend.setWidth = int(args[0])
                 elif args[0] == '-lh':
                     option = args.pop(0)
-                    self.legheight = int(args[0])
+                    self.legend.setHeight = int(args[0])
+                elif args[0] == '-lp':
+                    option = args.pop(0)
+                    if self.legend.setPosition(args[0]) != True:
+                        self.error = "illegal argument for '-lp': '%s'" % args[0]
+                        break
+
                 elif args[0] == '-log':
                     option = args.pop(0)
                     self.decades = int(args[0])
+                    self.legend.decades = int(args[0])
                 elif args[0] == '-s':
                     option = args.pop(0)
                     self.scale = float(args[0])
+                    self.legend.scale = float(args[0])
                 elif args[0] == '-n':
                     option = args.pop(0)
                     self.ndivs = int(args[0])
+                    self.legend.steps = int(args[0])
                     if self.ndivs == 0:
                         self.error = "illegal argument for '-n': '%s'" % args[0]
                         break
+
                 elif args[0] == '-l':
                     option = args.pop(0)
-                    self.label = args[0]
+                    self.legend.label = args[0]
 
                 elif args[0] == '-spec':
-		    self.redv='old_red(v)'
-		    self.grnv='old_grn(v)'
-		    self.bluv='old_blu(v)'
+		    self.redv='old_red(vin(v))'
+		    self.grnv='old_grn(vin(v))'
+		    self.bluv='old_blu(vin(v))'
                 
                 elif args[0] == '-mask':
                     option = args.pop(0)
@@ -538,7 +793,8 @@ class FalsecolorImage:
                 elif args[0] == '-b':
                     option = args.pop(0)
                     self.bluv = args[0]
-
+                
+                ## input and background image
                 elif args[0] == '-i':
                     option = args.pop(0)
                     if os.path.isfile(args[0]):
@@ -562,18 +818,11 @@ class FalsecolorImage:
                         self.error = "no such file: \"%s\"" % args[0]
                         break
 
+                ## contour line and band option
                 elif args[0] == '-cl':
                     self.docont = 'a'
-                    self.loff = 12
                 elif args[0] == '-cb':
-                    #if self.zerooff == 0:
-                    if False:
-                        print >>sys.stderr, "WARNING: '-cb' option incompatible with '-z'; using '-cl'"
-                        self.docont = 'a'
-                        self.loff = 12
-                    else:
-                        self.docont = 'b'
-                        self.loff = 13
+                    self.docont = 'b'
 
                 elif args[0] == '-m':
                     option = args.pop(0)
@@ -582,9 +831,11 @@ class FalsecolorImage:
                 elif args[0] == '-t':
                     option = args.pop(0)
                     self.tmpdir = args[0]
+                    self.legend.tmpdir = args[0]
                 
                 elif args[0] == '-d':
                     self.DEBUG = True
+                    self.legend.DEBUG = True
                 
                 elif args[0] == '-e':
                     self.doextrem = True
@@ -592,11 +843,7 @@ class FalsecolorImage:
                 
                 elif args[0] == '-z':
                     self.zerooff = 0.0
-                    #if self.docont == 'b':
-                    if False:
-                        print >>sys.stderr, "WARNING: '-cb' option incompatible with '-z'; using '-cl'"
-                        self.docont = 'a'
-                        self.loff = 12
+                    self.legend.zerooff = 0.0
 
                 else:
                     self.error = "bad option \"%s\"" % args[0]
@@ -622,8 +869,8 @@ class FalsecolorImage:
         # 211 202 1.292969e+00 1.308594e+00 1.300781e+00
         minx,miny,minr,ming,minb, maxx,maxy,maxr,maxg,maxb = extreme.split()
 
-        minpos = "%d %d" % (int(minx)+self.legwidth, int(miny))
-        maxpos = "%d %d" % (int(maxx)+self.legwidth, int(maxy))
+        minpos = "%d %d" % (int(minx)+self.legend.width, int(miny))
+        maxpos = "%d %d" % (int(maxx)+self.legend.width, int(maxy))
         minval = (float(minr)*.265 + float(ming)*.67 + float(minb)*.065) * self.mult
         maxval = (float(maxr)*.265 + float(maxg)*.67 + float(maxb)*.065) * self.mult
 

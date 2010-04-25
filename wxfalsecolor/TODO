@@ -2,7 +2,7 @@
 KNOWN ISSUES
 ============
 
-[none]
+* wxfalsecolor does not do background images (-p or -ip)
 
 
 USABILITY
@@ -17,19 +17,15 @@ FEATURES
 ========
 
 falsecolor2:
+------------
 
-* background colour option
-
-* advanced legend placement options
-  - vertical: left and right (bottom, middle, top)
-  - horizontal: top and bottom (left, middle, right)
-  
-  -> create legend class to handle creation of legend hdr
-  
-* new '-cb' feature combined with '-z' (non-continous gradient)
+* background colour option (limits of psign/pcomb?)
 
 
 wxfalsecolor:
+-------------
+
+* controls for legend placement (update getRGBAt() to honor legend offset)
 
 * 'pcond' feature
 
