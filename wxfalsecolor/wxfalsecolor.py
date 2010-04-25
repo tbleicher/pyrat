@@ -59,10 +59,10 @@ class RGBEImage(FalsecolorImage):
         """set legendoffset after falsecolor conversion"""
         FalsecolorImage.doFalsecolor(self, *args, **kwargs)
         if not self.error:
-            #TODO: consider legend position
-            if self.legendpos.startswith("left"):
+            self.legendoffset = (0,0)
+            if self.legend.position.startswith("W"):
                 self.legendoffset = (self.legend.width,0)
-            elif self.legendpos.startswith("top"):
+            elif self.legend.position.startswith("N"):
                 self.legendoffset = (0,self.legend.height)
 
 
@@ -71,6 +71,7 @@ class RGBEImage(FalsecolorImage):
         if self._array == []:
             return (-1,-1,-1,-1)
         x,y = pos
+
         x -= self.legendoffset[0]
         y -= self.legendoffset[1]
         if x < 0 or y < 0:
@@ -153,6 +154,7 @@ class RGBEImage(FalsecolorImage):
 
 
     def showError(self, wxparent, msg):
+        """display dialog with error message"""
         dlg = wx.MessageDialog(parent, message=msg, caption="Error", style=wx.OK|wx.ICON_ERROR)
         dlg.ShowModal()
         dlg.Destroy()
@@ -172,12 +174,15 @@ class FalsecolorControlPanel(wx.Panel):
 
     def _buildFCButtons(self):
         """create control elements in grid layout"""
-        #fcpanel.SetBackgroundColour(wx.BLUE)
-        #fcsizer = wx.BoxSizer(wx.VERTICAL)
-        
         ## type choice button
         self.fc_type = wx.Choice(self, wx.ID_ANY, choices=["color fill", "c-lines", "c-bands"])
+        self.fc_type.SetStringSelection("color fill")
         self.Bind(wx.EVT_CHOICE, self.updateFCButton, self.fc_type)
+        
+        self.positions = ['WS','W','WN','NW','N','NE','EN','E','ES','SE','S','SW']
+        self.legpos = wx.Choice(self, wx.ID_ANY, choices=self.positions, size=(50,-1))
+        self.legpos.SetStringSelection("WS")
+        self.Bind(wx.EVT_CHOICE, self.updatePosition, self.legpos)
         
         self.label = wx.TextCtrl(self, wx.ID_ANY, "NITS",  size=(50,-1))
         self.scale = wx.TextCtrl(self, wx.ID_ANY, "1000",  size=(50,-1))
@@ -195,27 +200,27 @@ class FalsecolorControlPanel(wx.Panel):
         self.legH = wx.TextCtrl(self, wx.ID_ANY, "200", size=(50,-1))
         
         ## 'falsecolor' button
-        #self.doFCButton = wx.Button(self, wx.ID_ANY, label='falsecolor')
         self.doFCButton = buttons.GenButton(self, wx.ID_ANY, label='falsecolor')
         self.doFCButton.Bind(wx.EVT_LEFT_DOWN, self.doFalsecolor)
         self.doFCButton.Disable()
 
-        layout = [(self.fc_type,                                None),
+        layout = [(self.fc_type,                             None),
+                  (self.legpos,                              None),
                   (wx.Panel(self,wx.ID_ANY,size=(-1,10)),    None),
                   (wx.StaticText(self, wx.ID_ANY, "label:"), self.label),
                   (wx.StaticText(self, wx.ID_ANY, "scale:"), self.scale),
                   (wx.StaticText(self, wx.ID_ANY, "steps:"), self.steps),
                   (wx.Panel(self,wx.ID_ANY,size=(-1,10)),    None),
-                  (self.fc_log,                                 self.logv),
-                  (self.fc_mask,                                self.maskv),
-                  (self.fc_col,                                 None),
-                  (self.fc_extr,                                None),
-                  (self.fc_zero,                                None),
+                  (self.fc_log,                              self.logv),
+                  (self.fc_mask,                             self.maskv),
+                  (self.fc_col,                              None),
+                  (self.fc_extr,                             None),
+                  (self.fc_zero,                             None),
                   (wx.Panel(self,wx.ID_ANY,size=(-1,10)),    None),
                   (wx.StaticText(self, wx.ID_ANY, "leg-w:"), self.legW),
                   (wx.StaticText(self, wx.ID_ANY, "leg-h:"), self.legH),
                   (wx.Panel(self,wx.ID_ANY,size=(-1,10)),    None),
-                  (self.doFCButton,                             None),
+                  (self.doFCButton,                          None),
                   (wx.Panel(self,wx.ID_ANY,size=(-1,5)),     None)]
         
         ## create grid sizer
@@ -242,13 +247,12 @@ class FalsecolorControlPanel(wx.Panel):
         self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_extr)
         self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_zero)
         
-        #fcsizer.Add(grid, proportion=1, flag=wx.EXPAND|wx.ALL, border=0)
-        #self.SetSizer(fcsizer)
         self.SetSizer(grid)
         self.SetInitialSize()
 
 
     def doFalsecolor(self, event):
+        """start conversion to falsecolor and update button"""
         if self.parentapp.rgbe2fc(event) == True:
             self._cmdLine = " ".join(self.getFCArgs())
             self.doFCButton.SetLabel("update fc")
@@ -258,6 +262,7 @@ class FalsecolorControlPanel(wx.Panel):
             self.doFCButton.SetLabel("update fc")
             self.doFCButton.Enable()
             self.doFCButton.SetBackgroundColour(wx.RED)
+        self.doFCButton.Refresh()
 
 
     def updateFCButton(self, event):
@@ -270,8 +275,22 @@ class FalsecolorControlPanel(wx.Panel):
                 self.doFCButton.SetBackgroundColour(wx.RED)
             else:
                 self.doFCButton.Disable()
-                self.doFCButton.SetBackgroundColour()
-    
+                self.doFCButton.SetBackgroundColour(wx.WHITE)
+            self.doFCButton.Refresh()
+
+
+    def updatePosition(self, event):
+        """update height and width when position changes"""
+        pos = self.positions[self.legpos.GetCurrentSelection()]
+        pos = pos.replace("-", "")
+        if pos.startswith("W") or pos.startswith("E"):
+            self.legW.SetValue("100")
+            self.legH.SetValue("200")
+        else:
+            self.legW.SetValue("400")
+            self.legH.SetValue("50")
+
+
 
     def getFCArgs(self):
         """collect command line args as list"""
@@ -280,6 +299,8 @@ class FalsecolorControlPanel(wx.Panel):
         
         if self.fc_type.GetCurrentSelection() > 0:
             args.append(["", "-cl", "-cb"][self.fc_type.GetCurrentSelection()])
+        args.append("-lp")
+        args.append(self.positions[self.legpos.GetCurrentSelection()])
 
         args.extend(["-l", self.label.GetValue()])
         args.extend(["-s", self.scale.GetValue()])
@@ -299,7 +320,6 @@ class FalsecolorControlPanel(wx.Panel):
             args.extend(["-lw", self.legW.GetValue()])
         if self.legH.GetValue() != "200":
             args.extend(["-lh", self.legH.GetValue()])
-
         return args        
 
 
@@ -308,9 +328,11 @@ class FalsecolorControlPanel(wx.Panel):
 
 
     def enableFC(self, text=""):
+        """enable and update doFCButton"""
         self.doFCButton.Enable()
         if text != "":
             self.doFCButton.SetLabel(text)
+        self.doFCButton.Refresh()
 
 
 
@@ -366,6 +388,7 @@ class FoldableControlsPanel(wx.Panel):
         panel.SetInitialSize()
         return panel
 
+
     def _buildPcondButtons(self, panel):
         pcpanel = wx.Panel(panel,wx.ID_ANY,size=(-1,35))
         pcsizer = wx.BoxSizer(wx.VERTICAL)
@@ -420,8 +443,7 @@ class FoldableControlsPanel(wx.Panel):
     def setBarSize(self, event):
         size = event.GetSize()
         self.pnl.SetDimensions(0, 0, size.GetWidth(), size.GetHeight())
-    
-    
+        
     def disableShowValues(self):
         self.showValues.SetValue(False)
         self.showValues.Disable()
@@ -608,7 +630,7 @@ class ImageFrame(wx.Frame):
                 del args[idx]
                 return ("", args)
         ## path is last argument (drag-n-drop and incorrect use)
-        if os.path.isfile(args[-1]):
+        if len(args) > 0 and os.path.isfile(args[-1]):
             if len(args) == 1 or args[-2] != '-p':
                 path = args.pop()
                 args = []
@@ -634,6 +656,7 @@ class ImageFrame(wx.Frame):
 
 
     def reset(self):
+        """reset array to inital (empty) values"""
         self._array = []
         self._arrayTrue = False
         self._showValues = False
