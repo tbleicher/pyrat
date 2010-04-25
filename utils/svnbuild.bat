@@ -21,14 +21,14 @@ for /f "tokens=* delims= " %%a in (svn_info) do (
 set revision=!str:~10!
 echo checking out %progname% (revision=%revision%)
 
-del /Q %tempdir%
+del /Q /F /S %tempdir%
 svn co http://pyrat.googlecode.com/svn/trunk/%progname% %tempdir%
 
-sed -i s/Revision/%revision%/ %tempdir%\%progname%.py
+sed -i s/REV/%revision%/ %tempdir%\%progname%.py
 del .\sed*
 
-del /Q dist
-del /Q build
+del /Q /F /S dist
+del /Q /F /S build
 del %specfile%
 python C:\pyinstaller-1.4\Makespec.py --onefile --console --icon=%progname%.ico %tempdir%\%progname%.py
 python C:\pyinstaller-1.4\Build.py %specfile%
@@ -37,10 +37,10 @@ del warn%progname%.txt
 
 move dist\%progname%.exe  .\%progname%.exe
 
-del /Q %tempdir%
-del /Q svn_info
-del /Q dist
-del /Q build
+del /Q /F /S %tempdir%
+del /Q /F    svn_info
+del /Q /F /S dist
+del /Q /F /S build
 
 :error
 echo "USAGE:    %0 progname"
