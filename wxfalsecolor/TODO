@@ -21,14 +21,21 @@ falsecolor2:
 
 * background colour option (limits of psign/pcomb?)
 
+* help/usage message
+
+* falsecolor compatibility mode (defaults)
+
 
 wxfalsecolor:
 -------------
-
-* controls for legend placement "-within"
 
 * 'pcond' feature
 
 * show Lux spot readings as labels on image (left mouse click)
 
 * show Lux average reading over area (click-drag)
+
+* include PIL for further image format support
+
+* handling of command line arguments like falsecolor2
+

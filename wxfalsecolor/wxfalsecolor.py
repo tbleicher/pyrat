@@ -167,8 +167,9 @@ class FalsecolorControlPanel(wx.Panel):
     def __init__(self, parent, parentapp, *args, **kwargs):
         wx.Panel.__init__(self, parent, *args, **kwargs)
         self.parentapp = parentapp
+        
+        self.positions = ['WS','W','WN','NW','N','NE','EN','E','ES','SE','S','SW']
         self._buildFCButtons()
-
         self._cmdLine = ""
 
 
@@ -179,10 +180,11 @@ class FalsecolorControlPanel(wx.Panel):
         self.fc_type.SetStringSelection("color fill")
         self.Bind(wx.EVT_CHOICE, self.updateFCButton, self.fc_type)
         
-        self.positions = ['WS','W','WN','NW','N','NE','EN','E','ES','SE','S','SW']
         self.legpos = wx.Choice(self, wx.ID_ANY, choices=self.positions, size=(50,-1))
         self.legpos.SetStringSelection("WS")
         self.Bind(wx.EVT_CHOICE, self.updatePosition, self.legpos)
+        self.inside = wx.CheckBox(self, wx.ID_ANY, 'inside')
+        self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.inside)
         
         self.label = wx.TextCtrl(self, wx.ID_ANY, "NITS",  size=(50,-1))
         self.scale = wx.TextCtrl(self, wx.ID_ANY, "1000",  size=(50,-1))
@@ -205,7 +207,7 @@ class FalsecolorControlPanel(wx.Panel):
         self.doFCButton.Disable()
 
         layout = [(self.fc_type,                             None),
-                  (self.legpos,                              None),
+                  (self.inside,                              self.legpos),
                   (wx.Panel(self,wx.ID_ANY,size=(-1,10)),    None),
                   (wx.StaticText(self, wx.ID_ANY, "label:"), self.label),
                   (wx.StaticText(self, wx.ID_ANY, "scale:"), self.scale),
@@ -300,7 +302,10 @@ class FalsecolorControlPanel(wx.Panel):
         if self.fc_type.GetCurrentSelection() > 0:
             args.append(["", "-cl", "-cb"][self.fc_type.GetCurrentSelection()])
         
-        args.extend(["-lp", self.positions[self.legpos.GetCurrentSelection()]])
+        position = self.positions[self.legpos.GetCurrentSelection()]
+        if self.inside.GetValue():
+            position = "-" + position
+        args.extend(["-lp", position])
         args.extend(["-lw", self.legW.GetValue()])
         args.extend(["-lh", self.legH.GetValue()])
 
