@@ -121,7 +121,7 @@ class FalsecolorBase:
 		    os.mkdir(self.tmpdir)
             except OSError, err:
 	        if self.DEBUG:
-                    print >>sys.stderr, "ERROR:", err
+                    self.log("warning: %s" % str(err))
 	else:
 	    os.mkdir(self.tmpdir)
 
@@ -167,11 +167,10 @@ class FalsecolorBase:
             return (int(parts[3]),int(parts[1]))
         except Exception, err:
             self.log(str(err), True)
-            return False
-
+            return (0,0)
 
     def log(self, msg, is_error=False):
-        """append <msg> to log and print if DEBUG"""
+        """append <msg> to log and write to stderr if DEBUG"""
         self._log.append(msg)
         if self.DEBUG or is_error:
             print >>sys.stderr, msg
@@ -195,9 +194,11 @@ class FalsecolorBase:
             return data
 
 
-    def showLog(self):
-        """print log out to stderr"""
-        print >>sys.stderr, "\n".join(self._log)
+    def writeLog(self, s=sys.stderr):
+        """write log to stderr"""
+        s.write("\nfalsecolor log:\n\n>> ")
+        s.write("\n>> ".join(self._log))
+        s.write("\n\n")
 
 
 
@@ -458,10 +459,10 @@ class FalsecolorLegend(FalsecolorBase):
         self._defaultsize = (True,True)
         self._within = False
 
-    def setHeight(self, h):
+    def setLegendHeight(self, h):
         """set legend height"""
         self.height = h
-        self._defaultsize = (self._defaultsize[0], False)
+        self._defaultsize = (self._defaultsize[1], False)
 
     def setPosition(self, pos):
         """check <pos> argument and set position"""
@@ -480,10 +481,10 @@ class FalsecolorLegend(FalsecolorBase):
         else:
             return False
 
-    def setWidth(self, w):
+    def setLegendWidth(self, w):
         """set legend width"""
         self.width = w
-        self._defaultsize = (False, self._defaultsize[1])
+        self._defaultsize = (False, self._defaultsize[0])
 
 
 
@@ -574,7 +575,7 @@ class FalsecolorImage(FalsecolorBase):
     def doFalsecolor(self, keeptmp=False):
         """create part images, combine and store image data in self.data"""
         if self.error != "":
-            print >>sys.stderr, "falsecolor2 error:", self.error
+            self.log("falsecolor2 error: %s" % self.error, True)
             return 
         try:
             if not self._input:
@@ -591,15 +592,15 @@ class FalsecolorImage(FalsecolorBase):
                 if self.doextrem is True:
                     self.showExtremes()
             else:
-                print >>sys.stderr, "ERROR: no data in falsecolor image"
-                self.showLog()
+                self.log("ERROR: no data in falsecolor image", True)
+                self.writeLog()
 
         except Exception, e:
-            print >>sys.stderr, "Falsecolor Error:", e
+            self.log("Falsecolor Error: %s" % str(e), True)
             self.error = str(e)
             traceback.print_exc(file=sys.stderr)
             if not self.DEBUG:
-                self.showLog()
+                self.writeLog()
         
         finally:
             if keeptmp == False and self.DEBUG == False:
@@ -739,18 +740,22 @@ class FalsecolorImage(FalsecolorBase):
     def setOptions(self,args):
         """check command line args"""
         if "-d" in args:
-            self.log("parseArgs: %s" % str(args))
+            self.DEBUG = True
+            self.log("setOptions: %s" % str(args))
 
         try:
             while args:
                 if args[0] == '-lw':
                     option = args.pop(0)
-                    self.legend.setWidth = int(args[0])
+                    self.log("    -lw %s" % args[0])
+                    self.legend.setLegendWidth(int(args[0]))
                 elif args[0] == '-lh':
                     option = args.pop(0)
-                    self.legend.setHeight = int(args[0])
+                    self.log("    -lh %s" % args[0])
+                    self.legend.setLegendHeight(int(args[0]))
                 elif args[0] == '-lp':
                     option = args.pop(0)
+                    self.log("    -lp %s" % args[0])
                     if self.legend.setPosition(args[0]) != True:
                         self.error = "illegal argument for '-lp': '%s'" % args[0]
                         break
@@ -852,11 +857,11 @@ class FalsecolorImage(FalsecolorBase):
 
         except ValueError, e:
             self.error = "bad value for option '%s': '%s'" % (option,args[0])
-            print >>sys.stderr, "ERROR:", self.error
+            self.log("ERROR: %s" % self.error, True)
 
         except IndexError, e:
             self.error = "missing argument for option '%s'" % option
-            print >>sys.stderr, "ERROR:", self.error
+            self.log("ERROR: %s" % self.error, True)
 
 
     def showExtremes(self):

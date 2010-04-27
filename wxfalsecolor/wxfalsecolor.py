@@ -299,8 +299,10 @@ class FalsecolorControlPanel(wx.Panel):
         
         if self.fc_type.GetCurrentSelection() > 0:
             args.append(["", "-cl", "-cb"][self.fc_type.GetCurrentSelection()])
-        args.append("-lp")
-        args.append(self.positions[self.legpos.GetCurrentSelection()])
+        
+        args.extend(["-lp", self.positions[self.legpos.GetCurrentSelection()]])
+        args.extend(["-lw", self.legW.GetValue()])
+        args.extend(["-lh", self.legH.GetValue()])
 
         args.extend(["-l", self.label.GetValue()])
         args.extend(["-s", self.scale.GetValue()])
@@ -316,10 +318,6 @@ class FalsecolorControlPanel(wx.Panel):
             args.append("-e")
         if self.fc_zero.GetValue():
             args.append("-z")
-        if self.legW.GetValue() != "100":
-            args.extend(["-lw", self.legW.GetValue()])
-        if self.legH.GetValue() != "200":
-            args.extend(["-lh", self.legH.GetValue()])
         return args        
 
 
