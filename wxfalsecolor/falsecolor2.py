@@ -440,7 +440,7 @@ class FalsecolorLegend(FalsecolorBase):
 
     def resetDefaults(self):
         """restore default values for legend"""
-        self.label = "Wh/m2"
+        self.label = "cd/m2"
         self.border = 0
         self.height = 200
         self.width = 100
@@ -689,7 +689,7 @@ class FalsecolorImage(FalsecolorBase):
     def resetDefaults(self):
         """set defaults for falsecolor conversion"""
         self.mult = 179.0
-        self.label = 'Nits'
+        self.label = 'cd/m2'
         self.scale = 1000
         self.decades = 0
         self.mask = 0
@@ -742,6 +742,10 @@ class FalsecolorImage(FalsecolorBase):
         if "-d" in args:
             self.DEBUG = True
             self.log("setOptions: %s" % str(args))
+
+	if "-h" in args:
+	    self.showHelp()
+	    sys.exit(0)
 
         try:
             while args:
@@ -886,6 +890,47 @@ class FalsecolorImage(FalsecolorBase):
 
         cmd = "pcompos - 0 0 \"%s\" %s \"%s\" %s" % (minvpic, minpos, maxvpic, maxpos)
         self.data = self._popenPipeCmd(cmd, self.data)
+
+
+    def showHelp(self):
+        """show usage message"""
+        options = [("-h", "", "show this help message"),
+
+        ("-i",  "IMG", "use IMG as input; the default is to read data from STDIN"), 
+        ("-p",  "IMG", "use IMG as background image"), 
+        ("-ip", "IMG", "use IMG as input and background image"), 
+
+        ("-s", "SCALE", "set maximum legend value to SCALE"),
+        ("-n", "STEPS", "create legend with STEPS subdivisions"),
+        ("-l", "LABEL", "use LABEL as legend title; default is \"Lux\" or \"cd/m2\""),
+        ("-log", "DEC", "create logarithmic scale with DEC decades below maximum"),
+
+        ("-lh", "HEIGHT", "set legend height in pixels"),
+        ("-lw", "WIDTH", "set legend width in pixels"),
+        ("-lp", "[-]WS|W|WN|NW|N|NE|EN|E|ES|SE|S|SW", "set legend position to the given direction (default EN);\nif preceded by \"-\" the legend will be within the image frame"),  
+
+        ("-cl", "", "create contour lines"),
+        ("-cb", "", "create contour bands"),
+
+        ("-e", "", "show values of brightest and darkest pixel"),
+        ("-z", "", "create legend with values starting at zero"),
+        ("-spec", "", "use old style color scheme"),
+        ("-mask", "MINV", "mask values below MINV with background colour (black)"),
+        
+        ("-d", "", "print detailed progress messages"),	
+        ("-t", "TEMPDIR", "use TEMPDIR as temporary directory."),
+        ("-m", "MULTI", "set luminouse efficacy to MULTI; default is 179 Wh/m2."),
+        ("-r", "EXPR", "set mapping of red colour channel"),
+        ("-g", "EXPR", "set mapping of green colour channel"),
+        ("-b", "EXPR", "set mapping of blue colour channel")]
+
+        indent = "    " 
+        sys.stdout.write("\nABOUT:\n")
+        sys.stdout.write("\n%s%s (v0.2,REV)\n" % (indent,sys.argv[0]))
+        sys.stdout.write("\nUSAGE:\n\n")
+        for o in options:
+            sys.stdout.write("%s%s %s\n" % (indent, o[0],o[1])) 
+            sys.stdout.write("%s%s%s\n\n" % (indent,indent, o[2].replace("\n", "\n"+indent+indent)))
 
 
     def toBMP(self, data=''):

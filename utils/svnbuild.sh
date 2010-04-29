@@ -45,7 +45,7 @@ echo "checking out ${progname} (revision=${revision})"
 svn co http://pyrat.googlecode.com/svn/trunk/${module} ${tempdir}
 
 ## replace "REV" in file with revision number
-echo "sed -i s/REV/${revision}/ ./${tempdir}/${progname}.py"
+echo "sed -i '' s/REV/${revision}/ ./${tempdir}/${progname}.py"
 sed -i '' s/REV/${revision}/  ./${tempdir}/${progname}.py
 
 echo "python /drives/c/pyinstaller-1.4/Makespec.py --onefile --console --icon=${progname}.ico ${tempdir}/${progname}.py"
