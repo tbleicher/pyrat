@@ -1,10 +1,5 @@
 #!/bin/bash
 
-if [ $# -eq 0 ]
-then
-    echo "$0 <progname>"
-    exit
-fi
 
 function cleanup {
     for d in ${tempdir} "build" "dist"
@@ -23,26 +18,77 @@ function cleanup {
     done
 }
 
+function usage {
+    echo -e "\nUsage:\n\n    $0 [-v version] <progname>\n"
+}
 
-progname=$1 
-specfile="${progname}.spec"
+## parse arguments for version option
+version=""
+args=`getopt v: $*`
+if [ $? != 0 ]
+then
+    usage
+    exit 2
+fi
+set -- $args
+
+for i
+do
+    case "$i"
+    in
+        -v)
+            version=$2; shift;
+            shift;;
+        --)
+            shift; break;;
+    esac
+done
+
+## remaining argument is progname
+progname=$1
+if [[ $progname == "" ]]
+then
+    usage
+    exit 2
+fi
 
 module=${progname}
 if [[ "${progname}" == "falsecolor2" ]]; then
     module="wxfalsecolor"
 fi
+
+if [[ ${version} == "" ]]
+then 
+    repopath="http://pyrat.googlecode.com/svn/trunk/${module}"
+else
+    repopath="http://pyrat.googlecode.com/svn/tags/${module}/${version}"
+fi
+    
+specfile="${progname}.spec"
 tempdir="${module}_temp"
+
 echo "progname : ${progname}"
+echo "version  : ${version}"
 echo "module   : ${module}"
+echo "repopath : ${repopath}"
 echo "tempdir  : ${tempdir}"
 
-revision=`svn info http://pyrat.googlecode.com/svn/trunk | grep ^Revision | cut -d ' ' -f 2`
+    
+revision=`svn info ${repopath} | grep ^Last\ Changed\ Rev | cut -d ' ' -f 4`
+#if [[ $? -ne 0 ]]
+if [[ ${revision} == "" ]]
+then 
+    echo "error getting svn info for ${repopath}"
+    exit 1
+fi
+echo "revision : ${revision}"
+
 
 ## remove old directories and files
 cleanup
 
-echo "checking out ${progname} (revision=${revision})"
-svn co http://pyrat.googlecode.com/svn/trunk/${module} ${tempdir}
+echo -e "\nchecking out ${progname} (revision=${revision})"
+svn co ${repopath} ${tempdir}
 
 ## replace "REV" in file with revision number
 echo "sed -i '' s/REV/${revision}/ ./${tempdir}/${progname}.py"
@@ -55,6 +101,7 @@ python C:/pyinstaller-1.4/Build.py ${specfile}
 
 ## save executable
 mv dist/${progname}.exe  ./${progname}.exe
+
 ## remove old directories and files
 cleanup
 
