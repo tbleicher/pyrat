@@ -329,9 +329,9 @@ class FalsecolorLegend(FalsecolorBase):
                 value = self.scale * 10**((x-1)*self.decades)
             else:
                 value = self.scale * (self.steps - self.zerooff - i) / self.steps
-            textlist.append(self._formatNumber(value))
+            textlist.append(self.formatNumber(value))
         if self.zerooff == 0:
-            textlist.append(self._formatNumber(0))
+            textlist.append(self.formatNumber(0))
         self.log( "legend text: '%s'" % str(textlist) )
         if self.is_vertical():
             return self._createTextV(textlist)
@@ -412,7 +412,7 @@ class FalsecolorLegend(FalsecolorBase):
         return numbers, max_x
 
     
-    def _formatNumber(self,n):
+    def formatNumber(self,n):
         """return number formated based on self.scale"""
         if int(n) == n:
             return "%d" % n
@@ -615,6 +615,28 @@ class FalsecolorImage(FalsecolorBase):
         cmd = "pcomb %s %s - %s" % (self.pc0args, self.pc1args, self.cpict)
         self.data = self._popenPipeCmd(cmd, data)
 
+    
+    def findAutoScale(self):
+        """quick'n'dirty version for auto scale"""
+        cmd = "pextrem -o"
+        extreme = self._popenPipeCmd(cmd, self._input+"\n")
+        minx,miny,minr,ming,minb, maxx,maxy,maxr,maxg,maxb = extreme.split()
+        maxv = (float(maxr)*0.265+float(maxg)*0.67+float(maxb)*0.065)*self.mult
+        for d in [0.001,0.01,0.1,1,10,100,1000,10000,100000,1000000]:
+            for s in range(1,10):
+                for ss in range(1,10):
+                    scale = d*s + d*ss*0.1
+                    if scale > maxv:
+                        self.scale = scale
+                        self.legend.scale = scale
+                        return
+        self.scale = 1000
+        self.legend.scale = 1000
+
+
+    def formatNumber(self,n):
+        return self.legend.formatNumber(n)
+
 
     def getPValueLines(self):
         """run pvalue on self._input to get "x,y,r,g,b" for each pixel"""
@@ -655,22 +677,25 @@ class FalsecolorImage(FalsecolorBase):
                 self._input = file(self.picture, "rb").read()
             self.data = self._input
             self._analyzeImage()
+            if self.scale == "auto":
+                self.findAutoScale()
         except Exception, err:
-            self.error = err
+            self.error = traceback.format_exc()
 
 
     def _analyzeImage(self):
         """
         get picture information from header lines
-        
-        TODO: see how pvalue command can be used to read Lux values  
         """
+        self.log("analyzeImage()")
         parts = self._input.split("\n\n")
+        self.log("    image parts=%d" % len(parts))
         header = parts[0]
+        self.log("    image header=%d bytes" % len(header))
         
         ## read image header
         for line in header.split("\n"):
-            line = line.strip()
+            line = line.rstrip()
             if line.startswith("pcond"):
                 ## pvalue can not be used directly
                 self._irridiance = False
@@ -679,11 +704,14 @@ class FalsecolorImage(FalsecolorBase):
                 self._irridiance = True
             elif line.startswith("rtrace") and "-i" in line.split():
                 self._irridiance = True
+        self.log("    image _irridiance=%s" % self._irridiance)
 
         ## get resolution string
         data = parts[1]
+        self.log("    image data=%d bytes" % len(data))
         y,YRES,x,XRES = data.split("\n")[0].split()
         self._resolution = (int(XRES),int(YRES))
+        self.log("    image resolution=(%s,%s)" % (XRES,YRES))
     
 
     def resetDefaults(self):
@@ -705,38 +733,6 @@ class FalsecolorImage(FalsecolorBase):
         self.legend.resetDefaults()
 
 
-    def saveToTif(self, path, data=''):
-        """convert data to TIF file"""
-        if data == '':
-            data = self.data
-        cmd = str("ra_tiff -z - \"%s\"" % path) 
-        return self._popenPipeCmd(cmd, self.data)
-
-
-    def saveToFile(self, path):
-        """convert image and save to file <path>"""
-        pathext = os.path.splitext(path)[1]
-        pathext = pathext.upper()
-        try:
-            data = None
-            if pathext == ".TIF":
-                self.saveToTif(path)
-            elif pathext == ".PPM":
-                data = self.toPPM()
-            elif pathext == ".BMP":
-                data = self.toBMP()
-            else:
-                data = self.data
-            if data:
-                f = open(path, 'wb')
-                f.write(data)
-                f.close()
-            return True
-        except Exception, err:
-            self.error = str(err)
-            return False
-
-        
     def setOptions(self,args):
         """check command line args"""
         if "-d" in args:
@@ -770,8 +766,11 @@ class FalsecolorImage(FalsecolorBase):
                     self.legend.decades = int(args[0])
                 elif args[0] == '-s':
                     option = args.pop(0)
-                    self.scale = float(args[0])
-                    self.legend.scale = float(args[0])
+                    if args[0].startswith("a") or args[0].startswith("A"):
+                        self.scale = "auto"
+                    else:
+                        self.scale = float(args[0])
+                        self.legend.scale = float(args[0])
                 elif args[0] == '-n':
                     option = args.pop(0)
                     self.ndivs = int(args[0])
@@ -866,6 +865,8 @@ class FalsecolorImage(FalsecolorBase):
         except IndexError, e:
             self.error = "missing argument for option '%s'" % option
             self.log("ERROR: %s" % self.error, True)
+
+        self.log("end of setOptions")
 
 
     def showExtremes(self):
