@@ -35,6 +35,11 @@ official policies, either expressed or implied, of Thomas Bleicher."""
 
 import sys,os
 import cStringIO
+try:
+    import ImageFile
+except ImportError:
+    ImageFile = False
+
 import wx
 import wx.lib.foldpanelbar as fpb
 import wx.lib.buttons as buttons
@@ -66,7 +71,7 @@ class RGBEImage(FalsecolorImage):
                 self.legendoffset = (0,self.legend.height)
 
 
-    def getRGBAt(self, pos):
+    def getRGBVAt(self, pos):
         """Return r,g,b values at <pos> or -1 if no values are available"""
         if self._array == []:
             return (-1,-1,-1,-1)
@@ -81,12 +86,31 @@ class RGBEImage(FalsecolorImage):
         return (-1,-1,-1,-1)
         
     
+    def getRGBVAverage(self, start, end):
+        """calculate and return average (r,g,b,v) for rectangle"""
+        rgbv = []
+        for y in range(start[1],end[1]+1):
+            for x in range(start[0],end[0]+1):
+                r,g,b,v = self.getRGBVAt((x,y))
+                if r > 0:
+                    rgbv.append((r,g,b,v))
+        if len(rgbv) > 0:
+            r_avg = sum([t[0] for t in rgbv]) / len(rgbv)
+            g_avg = sum([t[1] for t in rgbv]) / len(rgbv)
+            b_avg = sum([t[2] for t in rgbv]) / len(rgbv)
+            v_avg = sum([t[3] for t in rgbv]) / len(rgbv)
+            print "average=(%.2f,%.2f,%.2f, %.2f)" % (r_avg,g_avg,b_avg,v_avg)
+            return (r_avg,g_avg,b_avg,v_avg)
+        else:
+            return (-1,-1,-1,-1)
+
+
     def getValueAt(self, pos):
         """Return Lux value at <pos> or -1 if no values are available"""
         if not self.isIrridiance():
             return -1
         else:
-            r,g,b,v = self.getRGBAt(pos)
+            r,g,b,v = self.getRGBVAt(pos)
             return v
 
 
@@ -128,7 +152,10 @@ class RGBEImage(FalsecolorImage):
                 r = float(r)
                 g = float(g)
                 b = float(b)
-                v = (0.265*r+0.67*g+0.065*b)*self.mult
+                if self._irridiance:
+                    v = (0.265*r+0.67*g+0.065*b)*self.mult
+                else:
+                    v = -1
                 scanline.append((r,g,b,v))
             except:
                 pass
@@ -153,6 +180,53 @@ class RGBEImage(FalsecolorImage):
             return True
 
 
+    def saveToAny(self, path):
+        """convert self.data to image format supported by PIL"""
+        data = self.toBMP()
+        p = ImageFile.Parser()
+        p.feed(data)
+        im = p.close()
+        im.save(path) 
+
+
+    def saveToFile(self, path):
+        """convert image and save to file <path>"""
+        pathext = os.path.splitext(path)[1]
+        pathext = pathext.upper()
+        try:
+            data = None
+            if pathext == "HDR" or pathext == "PIC":
+                data = self.data
+            elif ImageFile:
+                self.saveToAny(path)
+                return True
+            elif pathext == ".PPM":
+                data = self.toPPM()
+            elif pathext == ".BMP":
+                data = self.toBMP()
+            elif pathext == ".TIF":
+                self.saveToTif(path)
+                return True
+            
+            if data:
+                f = open(path, 'wb')
+                f.write(data)
+                f.close()
+            return True
+
+        except Exception, err:
+            self.error = traceback.format_exc()
+            return False
+
+        
+    def saveToTif(self, path, data=''):
+        """convert data to TIF file"""
+        if data == '':
+            data = self.data
+        cmd = str("ra_tiff -z - \"%s\"" % path) 
+        self._popenPipeCmd(cmd, self.data)
+
+            
     def showError(self, wxparent, msg):
         """display dialog with error message"""
         dlg = wx.MessageDialog(parent, message=msg, caption="Error", style=wx.OK|wx.ICON_ERROR)
@@ -267,31 +341,12 @@ class FalsecolorControlPanel(wx.Panel):
         self.doFCButton.Refresh()
 
 
-    def updateFCButton(self, event):
-        """set label of falsecolor button to 'update'"""
-        if self._cmdLine != "":
-            newCmd = " ".join(self.getFCArgs())
-            if self._cmdLine != newCmd:
-                self.doFCButton.SetLabel("update fc")
-                self.doFCButton.Enable()
-                self.doFCButton.SetBackgroundColour(wx.RED)
-            else:
-                self.doFCButton.Disable()
-                self.doFCButton.SetBackgroundColour(wx.WHITE)
-            self.doFCButton.Refresh()
-
-
-    def updatePosition(self, event):
-        """update height and width when position changes"""
-        pos = self.positions[self.legpos.GetCurrentSelection()]
-        pos = pos.replace("-", "")
-        if pos.startswith("W") or pos.startswith("E"):
-            self.legW.SetValue("100")
-            self.legH.SetValue("200")
-        else:
-            self.legW.SetValue("400")
-            self.legH.SetValue("50")
-
+    def enableFC(self, text=""):
+        """enable and update doFCButton"""
+        self.doFCButton.Enable()
+        if text != "":
+            self.doFCButton.SetLabel(text)
+        self.doFCButton.Refresh()
 
 
     def getFCArgs(self):
@@ -329,13 +384,34 @@ class FalsecolorControlPanel(wx.Panel):
     def setFCLabel(self, text):
         self.label.SetValue(text)
 
+    
+    def updateFCButton(self, event):
+        """set label of falsecolor button to 'update'"""
+        if self._cmdLine != "":
+            newCmd = " ".join(self.getFCArgs())
+            if self._cmdLine != newCmd:
+                self.doFCButton.SetLabel("update fc")
+                self.doFCButton.Enable()
+                self.doFCButton.SetBackgroundColour(wx.RED)
+            else:
+                self.doFCButton.Disable()
+                self.doFCButton.SetBackgroundColour(wx.WHITE)
+            self.doFCButton.Refresh()
 
-    def enableFC(self, text=""):
-        """enable and update doFCButton"""
-        self.doFCButton.Enable()
-        if text != "":
-            self.doFCButton.SetLabel(text)
-        self.doFCButton.Refresh()
+
+    def updatePosition(self, event):
+        """update height and width when position changes"""
+        pos = self.positions[self.legpos.GetCurrentSelection()]
+        pos = pos.replace("-", "")
+        if pos.startswith("W") or pos.startswith("E"):
+            self.legW.SetValue("100")
+            self.legH.SetValue("200")
+        else:
+            self.legW.SetValue("400")
+            self.legH.SetValue("50")
+
+
+
 
 
 
@@ -420,6 +496,11 @@ class FoldableControlsPanel(wx.Panel):
         self.showValues.Bind(wx.EVT_CHECKBOX, self.OnShowValues)
         self.showValues.Disable()
         xisizer.Add(self.showValues, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
+        
+        clearButton = wx.Button(xipanel, wx.ID_ANY, "clear labels")
+        clearButton.Bind(wx.EVT_BUTTON, self.OnClearLabels)
+        xisizer.Add(clearButton, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
+        
         ## spacer
         spacer = wx.Panel(xipanel, wx.ID_ANY, size=(-1,5))
         xisizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
@@ -429,9 +510,26 @@ class FoldableControlsPanel(wx.Panel):
         return xipanel
 
 
+    def disableShowValues(self):
+        self.showValues.SetValue(False)
+        self.showValues.Disable()
+
+    def enableFC(self, text=""):
+        self.fcpanel.enableFC(text)
+
+    def enableShowValues(self,status=False):
+        self.showValues.Enable()
+        self.showValues.SetValue(status)
+
+    def getFCArgs(self):
+        return self.fcpanel.getFCArgs()
+
     def OnAbout(self, event):
         self.parent.showAboutDialog()
 
+    def OnClearLabels(self, event):
+        self.parent.picturepanel.clearLabels()
+    
     def OnCollapseMe(self, event):
         item = self.pnl.GetFoldPanel(0)
         self.pnl.Collapse(item)
@@ -447,24 +545,6 @@ class FoldableControlsPanel(wx.Panel):
         size = event.GetSize()
         self.pnl.SetDimensions(0, 0, size.GetWidth(), size.GetHeight())
         
-    def disableShowValues(self):
-        self.showValues.SetValue(False)
-        self.showValues.Disable()
-
-    def enableShowValues(self,status=False):
-        self.showValues.Enable()
-        self.showValues.SetValue(status)
-
-    def OnShowValues(self, event):
-        self.parent.setShowValues(self.showValues.GetValue())
-
-    
-    def enableFC(self, text=""):
-        self.fcpanel.enableFC(text)
-
-    def getFCArgs(self):
-        return self.fcpanel.getFCArgs()
-
     def setFCLabel(self, text):
         self.fcpanel.setFCLabel(text)
 
@@ -493,47 +573,191 @@ class ImagePanel(wx.Panel):
 
     def __init__(self, parent, *args, **kwargs):
         wx.Panel.__init__(self, parent, *args, **kwargs)
-        self.Bind(wx.EVT_SIZE, self.resizeImage)
         
+        self.Bind(wx.EVT_SIZE, self.resizeImage)
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
+        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+
         self.SetDropTarget(FileDropTarget(parent))
         
         self.parent = parent
         self.bmp = None
         self.img = None
         self._scale = 0
+        self._scaledImg = None
+        self._labels = []
         self.size = self.GetSize()
+        self._dragging = False
 
-    
-    def reportPosition(self, evt):
+
+    def addLabel(self, x, y, dx=0, dy=0):
+        """get value for (x,y) and add to self._labels"""
+        self._dragging = False
+        #print "TEST: spot position: x,y dx,dy", x,y, " ", dx,dy
+        
+        w,h = self._scaledImg.GetSize()
+        if x <= w and y <= h:
+            if self._scale > 1:
+                x = int(x*self._scale)
+                y = int(y*self._scale)
+            if dx == 0:
+                r,g,b,v = self.parent.getRGBVAt((x,y))
+                print "r,g,b,v=(%.2f,%.2f,%.2f, %.2f)" % (r,g,b,v)
+            else:
+                r,g,b,v = self.parent.getRGBVAverage((x,y),(x+dx,y+dy))
+        
+        if r > 0:
+            if v > 0:
+                label = "%s lux" % self.parent.formatNumber(v)
+            else:
+                label = "r,g,b=(%.3f,%.3f,%.3f)" % (r,g,b)
+            if dx == 0:
+                dx = 2
+                dy = 2
+            self._labels.append((x,y, label, dx,dy))
+            self.Refresh()
+
+
+    def clearLabels(self):
+        """reset lables list"""
+        self._labels = []
+        self.Refresh()
+
+
+    def _drawLabels(self, gc):
+        """draw labels with r,g,b or lux values""" 
+        #print "TEST: _drawLabels" 
+        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+        font.SetWeight(wx.BOLD)
+        gc.SetFont(font)
+        for x,y,l,dx,dy in self._labels:
+            if self._scale > 1:
+                x /= self._scale
+                y /= self._scale
+            w,h = gc.GetTextExtent(l)
+            path_spot = gc.CreatePath()
+            path_spot.AddRectangle(-1,-1,dx,dy)
+            path_label = gc.CreatePath()
+            path_label.AddRectangle(0,-1,w+3,h+1)
+            gc.PushState()
+            gc.Translate(x,y)
+            gc.SetPen(wx.Pen(wx.BLACK, 1))
+            gc.SetBrush(wx.Brush(wx.WHITE))
+            gc.DrawPath(path_label)
+            gc.DrawText(l,2,0)
+            gc.SetPen(wx.Pen(wx.RED, 1))
+            gc.SetBrush(wx.Brush(wx.RED, wx.TRANSPARENT))
+            gc.DrawPath(path_spot)
+            gc.PopState()
+
+
+    def _drawTestPath(self, gc):
+        BASE  = 80.0    # sizes used in shapes drawn below
+        BASE2 = BASE/2
+        BASE4 = BASE/4
+        path = gc.CreatePath()
+        path.AddCircle(0, 0, BASE2)
+        path.MoveToPoint(0, -BASE2)
+        path.AddLineToPoint(0, BASE2)
+        path.MoveToPoint(-BASE2, 0)
+        path.AddLineToPoint(BASE2, 0)
+        path.CloseSubpath()
+        path.AddRectangle(-BASE4, -BASE4/2, BASE2, BASE4)
+
+        # Now use that path to demonstrate various capbilites of the grpahics context
+        gc.PushState()             # save current translation/scale/other state 
+        gc.Translate(60, 75)       # reposition the context origin
+
+        gc.SetPen(wx.Pen("navy", 1))
+        gc.SetBrush(wx.Brush("pink"))
+        gc.DrawPath(path)
+        gc.PopState()
+
+
+    def _drawBMP(self, gc):
+        """draw (background) bitmap to graphics context"""
+        bmp = wx.BitmapFromImage(self._scaledImg)
+        size = bmp.GetSize()
+        gc.DrawBitmap(bmp, 0,0, size.width, size.height)
+
+
+    def OnLeftDown(self, evt):
+        """set dragging flag when left mouse button is pressed"""
+        if self._scaledImg == None:
+            return
+        self._dragging = evt.GetPosition()
+
+
+    def OnLeftUp(self, evt):
+        """show spot or average reading"""
+        if self._scaledImg == None:
+            return
+        x2,y2 = evt.GetPosition() 
+        if self._dragging == False:
+            self.addLabel(x2,y2)
+        else:
+            x1,y1 = self._dragging
+            if x1 > x2:
+                x1,x2 = x2,x1
+            if y1 > y2:
+                y1,y2 = y2,y1
+            dx = x2 - x1
+            dy = y2 - y1
+            if dx > 2 and dy > 2:
+                #print "TEST dragging area: (%d,%d) (%d,%d)" % (x1,y1,x2,y2)
+                self.addLabel(x1,y1,dx,dy)
+            else:
+                self.addLabel(x2,y2)
+        self._dragging = False
+
+
+    def OnMouseMotion(self, evt):
         """return cursor (x,y) in pixel coords of self.img - (x,y) is 0 based!"""
+        if self._scaledImg == None:
+            return
+        
         x,y = evt.GetPosition()
-        if self._scale > 1:
-            x *= self._scale
-            y *= self._scale
-        self.parent.showPixelValueAt( (int(x),int(y)) )
+        if self._dragging != False:
+            ## draw dragging frame
+            dx = x - self._dragging[0]
+            dy = y - self._dragging[1]
+            self.Refresh()
+
+        w,h = self._scaledImg.GetSize()
+        if x <= w and y <= h:
+            if self._scale > 1:
+                x *= self._scale
+                y *= self._scale
+            self.parent.showPixelValueAt( (int(x),int(y)) )
         
     
+    def OnPaint(self, evt):
+        """redraw image panel area"""
+        dc = wx.PaintDC(self)
+        try:
+            gc = wx.GraphicsContext.Create(dc)
+        except NotImplementedError:
+            dc.DrawText("This build of wxPython does not support the wx.GraphicsContext "
+                        "family of classes.",
+                        25, 25)
+            return
+
+        if self._scaledImg:
+            self._drawBMP(gc)
+
+        ## draw overlay
+        if self._labels != []:
+            self._drawLabels(gc)
+
+
     def resizeImage(self, evt):
         """scale image to fit frame proportionally"""
         self.size = evt.GetSize()
         self.scaleImage()
     
     
-    def setBitmap(self):
-        """convert scale image to new bitmap graphic"""
-        if self.bmp:
-            self.bmp.Destroy()
-        self.bmp = wx.StaticBitmap(self,wx.ID_ANY,wx.BitmapFromImage(self._scaledImg))
-        self.bmp.Bind(wx.EVT_MOTION, self.reportPosition)
-
-
-    def setImage(self, img):
-        """set wx.Image"""
-        self.img = img
-        self.scaleImage()
-        self.Update()
-
-
     def scaleImage(self):
         """scale image to fit frame"""
         if not self.img:
@@ -549,9 +773,24 @@ class ImagePanel(wx.Panel):
                     self._scaledImg = self.img.Scale( int(w/self._scale), int(h/self._scale) )
                 else:
                     self._scaledImg = self.img
-                self.setBitmap()
+                #self.setBitmap()
             self.Refresh()
     
+
+    def setBitmap(self):
+        """UNUSED - convert scale image to new bitmap graphic"""
+        if self.bmp:
+            self.bmp.Destroy()
+        self.bmp = wx.StaticBitmap(self,wx.ID_ANY,wx.BitmapFromImage(self._scaledImg))
+        #self.bmp.Bind(wx.EVT_MOTION, self.OnMouseMotion)
+
+
+    def setImage(self, img):
+        """set wx.Image"""
+        self.img = img
+        self.scaleImage()
+        self.Update()
+
 
 
 class ImageFrame(wx.Frame):
@@ -579,7 +818,12 @@ class ImageFrame(wx.Frame):
         self.img = None
         self.path = ""
         self.filename = ""
-        
+
+        if ImageFile:
+            self._ra2tiff = False
+        else:
+            self._ra2tiff = self._searchBinary("ra2tiff")
+
         self.Size = (800,600)
         
         path,args = self._checkCmdArgs(args)
@@ -614,6 +858,22 @@ class ImageFrame(wx.Frame):
         self.menubar.Append(self.file, '&File')
         self.fileOpen = self.file.Append(wx.ID_ANY, '&Open file')
         self.Bind(wx.EVT_MENU, self.onLoadImage, self.fileOpen)
+
+
+    def _buildSaveAsWildcard(self):
+        """compile wildcard string based on available converters
+        """
+        wildcard = ["HDR file|*.hdr"]
+        if ImageFile:
+            wildcard.append("BMP file|*.bmp|GIF file|*.gif|JPEG file|*.jpg")
+            wildcard.append("PDF file|*.pdf|PNG file|*.png|PPM file|*.ppm")
+            wildcard.append("TIFF file|*.tiff|XBM file|*.xbm")
+        else:
+            wildcard.append("BMP file|*.bmp|PPM file|*.ppm")
+            if self._ra2tiff:
+                wildcard.append("TIF file|*.tif")
+        wildcard.append("PIC (old)|*.pic")
+        return "|".join(wildcard)
 
 
     def _checkCmdArgs(self, args):
@@ -658,19 +918,35 @@ class ImageFrame(wx.Frame):
         self.panelSizer.Add( quitbutton, proportion=0, flag=wx.EXPAND|wx.ALL|wx.ALIGN_BOTTOM, border=10 )
 
 
-    def reset(self):
-        """reset array to inital (empty) values"""
-        self._array = []
-        self._arrayTrue = False
-        self._showValues = False
-        self.controls.enableShowValues()
+    def formatNumber(self, n):
+        """use FalsecolorImage formating for consistency"""
+        if self.rgbeImg:
+            return self.rgbeImg.formatNumber(n)
+        else:
+            return "%s" % n
+
+
+    def getRGBVAt(self, pos):
+        """return pixel value at position"""
+        if self.rgbeImg:
+            return self.rgbeImg.getRGBVAt(pos)
+        else:
+            return (-1,-1,-1,-1)
+
+
+    def getRGBVAverage(self, start, end):
+        """return average pixel value for rectangle"""
+        if self.rgbeImg:
+            return self.rgbeImg.getRGBVAverage(start,end)
+        else:
+            return (-1,-1,-1,-1)
 
 
     def loadImage(self, path, args=[]):
         """create instance of falsecolor image from <path>"""
         self.reset()
         self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-	self.rgbeImg = RGBEImage(self, ["-i", path] + args)
+	self.rgbeImg = RGBEImage(self, ["-d", "-i", path] + args)
         self.rgbeImg.readImageData(path)
         if self.rgbeImg.error:
             msg = "Error loading image:\n%s" % self.rgbeImg.error
@@ -695,7 +971,7 @@ class ImageFrame(wx.Frame):
                           message = 'Choose an image to open',
                           defaultDir = '',
                           defaultFile = '',
-                          wildcard = 'HDR files|*.hdr|PIC files|*.pic|all files |*.*',
+                          wildcard = 'Radiance Image Files (*.hdr,*.pic)|*.hdr;*.pic|all files |*.*',
                           style = wx.OPEN)
         if filedialog.ShowModal() == wx.ID_OK:
             path = filedialog.GetPath()
@@ -707,15 +983,16 @@ class ImageFrame(wx.Frame):
         self.Close()
 
 
-    def onSaveImage(self,event):
+    def onSaveImage(self, event):
         """save bmp image to file"""
         dirname, filename = os.path.split(self.path)
         filebase = os.path.splitext(filename)[0]
+        formats = self._buildSaveAsWildcard()
         filedialog = wx.FileDialog(self,
                           message = 'save image',
                           defaultDir = dirname,
-                          defaultFile = filebase + '_fc.hdr',
-                          wildcard = 'HDR file|*.hdr|BMP file|*.bmp|PPM file|*.ppm|TIF file|*.tif|PIC (old)|*.pic',
+                          defaultFile = filebase + '.hdr',
+                          wildcard = formats,
                           style = wx.SAVE)
         if filedialog.ShowModal() == wx.ID_OK:
             path = filedialog.GetPath()
@@ -723,6 +1000,15 @@ class ImageFrame(wx.Frame):
             if result != True:
                 msg = "Error saving image:\n" + self.rgbeImg.error
                 self.showError(msg)
+
+
+    def reset(self):
+        """reset array to inital (empty) values"""
+        self._array = []
+        self._arrayTrue = False
+        self._showValues = False
+        self.controls.enableShowValues()
+        self.picturepanel.clearLabels()
 
 
     def rgbe2fc(self,event):
@@ -741,6 +1027,12 @@ class ImageFrame(wx.Frame):
             self.updatePicturePanel()
             self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
             return True
+
+
+    def _searchBinary(self,bname):
+        """try to find <bname> in search path"""
+        #TODO
+        return False
 
 
     def setShowValues(self, show):
@@ -792,21 +1084,12 @@ class ImageFrame(wx.Frame):
         """set pixel position of mouse cursor"""
         value = ""
         if self.rgbeImg and self._showValues:
-            r,g,b,v = self.rgbeImg.getRGBAt(pos)
+            r,g,b,v = self.rgbeImg.getRGBVAt(pos)
             if r > 0:
                 value = "rgb=(%.3f,%.3f,%.3f)" % (r,g,b)
                 if v > 0 and self.rgbeImg.isIrridiance():
-                    if v < 1:
-                        value = "%s  value=%.3f lux" % (value,v) 
-                    elif v < 10:
-                        value = "%s  value=%.2f lux" % (value,v) 
-                    elif v < 100:
-                        value = "%s  value=%.1f lux" % (value,v) 
-                    else:
-                        value = "%s  value=%d lux" % (value,v) 
-
-        self.statusbar.SetStatusText("'%s':   x,y=(%d,%d)   %s" % (self.filename, pos[0],pos[1], value))
-
+                    value = "%s  value=%s lux" % (value,self.formatNumber(v)) 
+            self.statusbar.SetStatusText("'%s':   x,y=(%d,%d)   %s" % (self.filename, pos[0],pos[1], value))
 
     def updatePicturePanel(self):
         """recreate BMP image"""
@@ -821,7 +1104,9 @@ class ImageFrame(wx.Frame):
                 self.showError(msg)
             return
         self.picturepanel.Refresh()
-    
+   
+
+
 
 if __name__ == "__main__":   
     try:
