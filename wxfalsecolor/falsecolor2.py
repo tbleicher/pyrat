@@ -618,6 +618,7 @@ class FalsecolorImage(FalsecolorBase):
     
     def findAutoScale(self):
         """quick'n'dirty version for auto scale"""
+        self.log("findAutoScale()") 
         cmd = "pextrem -o"
         extreme = self._popenPipeCmd(cmd, self._input+"\n")
         minx,miny,minr,ming,minb, maxx,maxy,maxr,maxg,maxb = extreme.split()
@@ -629,7 +630,10 @@ class FalsecolorImage(FalsecolorBase):
                     if scale > maxv:
                         self.scale = scale
                         self.legend.scale = scale
+                        self.log("    scale=%s" % self.formatNumber(self.scale))
                         return
+
+        ## return to defaults if scale was not found 
         self.scale = 1000
         self.legend.scale = 1000
 

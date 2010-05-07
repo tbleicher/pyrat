@@ -106,7 +106,6 @@ class RGBEImage(FalsecolorImage):
             g_avg = sum([t[1] for t in rgbv]) / len(rgbv)
             b_avg = sum([t[2] for t in rgbv]) / len(rgbv)
             v_avg = sum([t[3] for t in rgbv]) / len(rgbv)
-            #print "average=(%.2f,%.2f,%.2f, %.2f)" % (r_avg,g_avg,b_avg,v_avg)
             return (r_avg,g_avg,b_avg,v_avg)
         else:
             return (-1,-1,-1,-1)
@@ -577,12 +576,14 @@ class FileDropTarget(wx.FileDropTarget):
     def OnDropFiles(self, x, y, filenames):
         """validate image before passing it on to self.app.loadImage()"""
         path = filenames[0]
-	rgbeImg = RGBEImage(self, ["-i", path])
+	## create RGBEImage to check file type and data
+        rgbeImg = RGBEImage(self, ["-i", path])
         rgbeImg.readImageData(path)
         if rgbeImg.error:
             msg = "Error loading image.\nFile: %s\nError: %s" % (path,rgbeImg.error)
             self.app.showError(msg)
         else:
+            ## now load for real
             self.app.loadImage(path)
         
 
@@ -613,6 +614,7 @@ class ImagePanel(wx.Panel):
         self._labels = []
         self.size = self.GetSize()
         self._dragging = False
+        self._draggingFrame = (0,0)
 
         self.OnSize(None)
 
@@ -630,13 +632,15 @@ class ImagePanel(wx.Panel):
                 r,g,b,v = self.parent.getRGBVAt((x,y))
             else:
                 r,g,b,v = self.parent.getRGBVAverage((x,y),(x+dx,y+dy))
-            #print "XXX fake values for rgbv"
+            #print "TEST: fake values for rgbv"
             #r,g,b,v = (0.1,0.2,0.3,(0.0265+0.134+0.0195)*179)
+ 
         if r > 0:
             if v > 0:
                 label = "%s lux" % self.parent.formatNumber(v)
             else:
-                label = "r,g,b=(%.3f,%.3f,%.3f)" % (r,g,b)
+                lum = (r*0.265+g*0.67+b*0.065)*179
+                label = "%s cd/m2" % self.parent.formatNumber(lum)
             if dx == 0:
                 dx = 2
                 dy = 2
@@ -663,16 +667,20 @@ class ImagePanel(wx.Panel):
             dc.DrawText("wx.GraphicsContext not supported", 25, 25)
             return
 
-        self._drawBackground(gc)
+        #self._drawBackground(gc)
         ## draw image
         if self._scaledImg:
             self._drawBMP(gc)
         ## draw overlay
         if self._labels != []:
             self._drawLabels(gc)
+        
+        if self._dragging:
+            self._drawDraggingFrame(gc)
 
 
     def _drawBackground(self, gc):
+        """debug method: draw pink background to show image shape"""
         path_bg = gc.CreatePath()
         w,h = self.GetClientSizeTuple()
         path_bg.AddRectangle(0,0,w,h)
@@ -685,6 +693,26 @@ class ImagePanel(wx.Panel):
         bmp = wx.BitmapFromImage(self._scaledImg)
         size = bmp.GetSize()
         gc.DrawBitmap(bmp, 0,0, size.width, size.height)
+
+
+    def _drawDraggingFrame(self,gc):
+        """draw translucent frame over dragging area"""
+        x,y = self._dragging
+        dx,dy = self._draggingFrame
+        if dx < 0:
+            x += dx
+            dx *= -1
+        if dy < 0:
+            y += dy
+            dy *= -1
+        gc.PushState()
+        gc.SetPen(wx.Pen(wx.BLUE, 1))
+        gc.SetBrush(wx.Brush(wx.Colour(0,0,255,51), wx.SOLID))
+        gc.Translate(x,y)
+        path = gc.CreatePath()
+        path.AddRectangle(0,0,dx,dy)
+        gc.DrawPath(path)
+        gc.PopState()
 
 
     def _drawLabels(self, gc):
@@ -761,6 +789,7 @@ class ImagePanel(wx.Panel):
         if self._scaledImg == None:
             return
         self._dragging = evt.GetPosition()
+        self._draggingFrame = (0,0)
 
 
     def OnLeftUp(self, evt):
@@ -779,11 +808,12 @@ class ImagePanel(wx.Panel):
             dx = x2 - x1
             dy = y2 - y1
             if dx > 2 and dy > 2:
-                #print "TEST dragging area: (%d,%d) (%d,%d)" % (x1,y1,x2,y2)
                 self.addLabel(x1,y1,dx,dy)
             else:
                 self.addLabel(x2,y2)
         self._dragging = False
+        self._draggingFrame = (0,0)
+        self.UpdateDrawing()
 
 
     def OnMouseMotion(self, evt):
@@ -796,7 +826,8 @@ class ImagePanel(wx.Panel):
             ## draw dragging frame
             dx = x - self._dragging[0]
             dy = y - self._dragging[1]
-            self.Refresh()
+            self._draggingFrame = (dx,dy)
+            self.UpdateDrawing()
 
         w,h = self._scaledImg.GetSize()
         if x <= w and y <= h:
@@ -1007,7 +1038,7 @@ class wxFalsecolorFrame(wx.Frame):
         if self.rgbeImg:
             return self.rgbeImg.formatNumber(n)
         else:
-            return "%s" % n
+            return str(n)
 
 
     def getFrameSize(self):
@@ -1036,7 +1067,7 @@ class wxFalsecolorFrame(wx.Frame):
         """create instance of falsecolor image from <path>"""
         self.reset()
         self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-        fcargs = ["-i", path] + args
+        fcargs = ["-s", "auto", "-i", path] + args
         if DEBUG:
             fcargs = ["-d"] + fcargs
 	self.rgbeImg = RGBEImage(self, fcargs)
