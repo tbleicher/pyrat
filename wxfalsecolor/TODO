@@ -8,6 +8,8 @@ KNOWN ISSUES
 USABILITY
 =========
 
+* "rubberbanding" for area average display
+
 * add menu bar
 
 * split falsecolor options in 'base' and 'advanced' (pop-up)
@@ -21,21 +23,15 @@ falsecolor2:
 
 * background colour option (limits of psign/pcomb?)
 
-* help/usage message
-
 * falsecolor compatibility mode (defaults)
 
 
 wxfalsecolor:
 -------------
 
-* 'pcond' feature
+* preferences dialog and saving
 
-* show Lux spot readings as labels on image (left mouse click)
-
-* show Lux average reading over area (click-drag)
-
-* include PIL for further image format support
+* 'pcond' feature (requires preferences?)
 
 * handling of command line arguments like falsecolor2
 

@@ -35,10 +35,7 @@ official policies, either expressed or implied, of Thomas Bleicher."""
 
 import sys,os
 import cStringIO
-try:
-    import ImageFile
-except ImportError:
-    ImageFile = False
+import traceback
 
 import wx
 import wx.lib.foldpanelbar as fpb
@@ -47,7 +44,17 @@ from wx.lib.wordwrap import wordwrap
 
 from falsecolor2 import FalsecolorImage
 
+DEBUG = 0
 
+WX_IMAGE_WILDCARD = "BMP file|*.bmp|JPEG file|*.jpg|PNG file|*.png|TIFF file|*.tif|PNM file|*.pnm" 
+WX_IMAGE_FORMATS = {".bmp":  wx.BITMAP_TYPE_BMP,
+                    ".jpg":  wx.BITMAP_TYPE_JPEG,
+                    ".jpeg": wx.BITMAP_TYPE_JPEG,
+                    ".png":  wx.BITMAP_TYPE_PNG,
+                    ".tif":  wx.BITMAP_TYPE_TIF,
+                    ".tiff": wx.BITMAP_TYPE_TIF,
+                    ".pnm":  wx.BITMAP_TYPE_PNM}
+        
 class RGBEImage(FalsecolorImage):
     """extends FalsecolorImage with interactive methods"""
 
@@ -99,7 +106,7 @@ class RGBEImage(FalsecolorImage):
             g_avg = sum([t[1] for t in rgbv]) / len(rgbv)
             b_avg = sum([t[2] for t in rgbv]) / len(rgbv)
             v_avg = sum([t[3] for t in rgbv]) / len(rgbv)
-            print "average=(%.2f,%.2f,%.2f, %.2f)" % (r_avg,g_avg,b_avg,v_avg)
+            #print "average=(%.2f,%.2f,%.2f, %.2f)" % (r_avg,g_avg,b_avg,v_avg)
             return (r_avg,g_avg,b_avg,v_avg)
         else:
             return (-1,-1,-1,-1)
@@ -140,7 +147,7 @@ class RGBEImage(FalsecolorImage):
         if lines == False:
             dlg.Destroy()
             msg = "Error reading pixel values:\n%s" % self.error
-            self.showError(wxparent,msg)
+            self.showError(msg)
             return False
         
         self._array = []
@@ -181,32 +188,28 @@ class RGBEImage(FalsecolorImage):
 
 
     def saveToAny(self, path):
-        """convert self.data to image format supported by PIL"""
-        data = self.toBMP()
-        p = ImageFile.Parser()
-        p.feed(data)
-        im = p.close()
-        im.save(path) 
+        """convert self.data to image format supported by wx"""
+        ext = os.path.splitext(path)[1]
+        ext = ext.lower()
+        format = WX_IMAGE_FORMATS.get(ext, wx.BITMAP_TYPE_BMP)
+        ppm = self.toPPM()
+        io = cStringIO.StringIO(ppm)
+        img = wx.ImageFromStream(io)
+        img.SaveFile(path, format)
 
 
     def saveToFile(self, path):
         """convert image and save to file <path>"""
         pathext = os.path.splitext(path)[1]
-        pathext = pathext.upper()
+        pathext = pathext.lower()
         try:
             data = None
-            if pathext == "HDR" or pathext == "PIC":
+            if pathext == ".hdr" or pathext == ".pic":
                 data = self.data
-            elif ImageFile:
-                self.saveToAny(path)
-                return True
-            elif pathext == ".PPM":
+            elif pathext == ".ppm":
                 data = self.toPPM()
-            elif pathext == ".BMP":
-                data = self.toBMP()
-            elif pathext == ".TIF":
-                self.saveToTif(path)
-                return True
+            else:
+                self.saveToAny(path)
             
             if data:
                 f = open(path, 'wb')
@@ -226,13 +229,24 @@ class RGBEImage(FalsecolorImage):
         cmd = str("ra_tiff -z - \"%s\"" % path) 
         self._popenPipeCmd(cmd, self.data)
 
-            
-    def showError(self, wxparent, msg):
+
+    def showError(self, msg):
         """display dialog with error message"""
-        dlg = wx.MessageDialog(parent, message=msg, caption="Error", style=wx.OK|wx.ICON_ERROR)
+        dlg = wx.MessageDialog(self.wxparent, message=msg, caption="Error", style=wx.OK|wx.ICON_ERROR)
         dlg.ShowModal()
         dlg.Destroy()
-    
+
+
+    def showWarning(self, msg):
+        """display dialog with error message"""
+        dlg = wx.MessageDialog(self.wxparent, message=msg, caption="Warning", style=wx.YES_NO|wx.ICON_WARN)
+        result == dlg.ShowModal()
+        dlg.Destroy()
+        if result == wx.ID_OK:
+            return True
+        else:
+            return False
+
 
 
 
@@ -413,9 +427,6 @@ class FalsecolorControlPanel(wx.Panel):
 
 
 
-
-
-
 class FoldableControlsPanel(wx.Panel):
     """combines individual feature panels"""
     
@@ -501,6 +512,10 @@ class FoldableControlsPanel(wx.Panel):
         clearButton.Bind(wx.EVT_BUTTON, self.OnClearLabels)
         xisizer.Add(clearButton, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
         
+        saveBitmap = wx.Button(xipanel, wx.ID_ANY, "save bitmap")
+        saveBitmap.Bind(wx.EVT_BUTTON, self.OnSaveBitmap)
+        xisizer.Add(saveBitmap, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
+        
         ## spacer
         spacer = wx.Panel(xipanel, wx.ID_ANY, size=(-1,5))
         xisizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
@@ -538,6 +553,9 @@ class FoldableControlsPanel(wx.Panel):
         self.pnl.Expand(self.pnl.GetFoldPanel(0))
         self.pnl.Collapse(self.pnl.GetFoldPanel(1))
 
+    def OnSaveBitmap(self, event):
+        self.parent.picturepanel.saveBitmap()
+    
     def OnShowValues(self, event):
         self.parent.setShowValues(self.showValues.GetValue())
 
@@ -570,15 +588,20 @@ class FileDropTarget(wx.FileDropTarget):
 
 
 class ImagePanel(wx.Panel):
-
+    """
+    A panel to display the bitmap image data.
+    """
     def __init__(self, parent, *args, **kwargs):
-        wx.Panel.__init__(self, parent, *args, **kwargs)
+        wx.Panel.__init__(self, parent,
+                          style=wx.SUNKEN_BORDER|wx.NO_FULL_REPAINT_ON_RESIZE,
+                          *args, **kwargs)
         
-        self.Bind(wx.EVT_SIZE, self.resizeImage)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_ERASE_BACKGROUND, self.DoNothing)
 
         self.SetDropTarget(FileDropTarget(parent))
         
@@ -591,11 +614,12 @@ class ImagePanel(wx.Panel):
         self.size = self.GetSize()
         self._dragging = False
 
+        self.OnSize(None)
+
 
     def addLabel(self, x, y, dx=0, dy=0):
         """get value for (x,y) and add to self._labels"""
         self._dragging = False
-        #print "TEST: spot position: x,y dx,dy", x,y, " ", dx,dy
         
         w,h = self._scaledImg.GetSize()
         if x <= w and y <= h:
@@ -604,10 +628,10 @@ class ImagePanel(wx.Panel):
                 y = int(y*self._scale)
             if dx == 0:
                 r,g,b,v = self.parent.getRGBVAt((x,y))
-                print "r,g,b,v=(%.2f,%.2f,%.2f, %.2f)" % (r,g,b,v)
             else:
                 r,g,b,v = self.parent.getRGBVAverage((x,y),(x+dx,y+dy))
-        
+            #print "XXX fake values for rgbv"
+            #r,g,b,v = (0.1,0.2,0.3,(0.0265+0.134+0.0195)*179)
         if r > 0:
             if v > 0:
                 label = "%s lux" % self.parent.formatNumber(v)
@@ -617,18 +641,54 @@ class ImagePanel(wx.Panel):
                 dx = 2
                 dy = 2
             self._labels.append((x,y, label, dx,dy))
-            self.Refresh()
+            self.UpdateDrawing()
 
 
     def clearLabels(self):
         """reset lables list"""
         self._labels = []
-        self.Refresh()
+        self.UpdateDrawing()
+
+
+    def DoNothing(self, evt):
+        """swallow EVT_ERASE_BACKGROUND"""
+        pass
+
+
+    def Draw(self, dc):
+        """do the actual drawing"""
+        try:
+            gc = wx.GraphicsContext.Create(dc)
+        except NotImplementedError:
+            dc.DrawText("wx.GraphicsContext not supported", 25, 25)
+            return
+
+        self._drawBackground(gc)
+        ## draw image
+        if self._scaledImg:
+            self._drawBMP(gc)
+        ## draw overlay
+        if self._labels != []:
+            self._drawLabels(gc)
+
+
+    def _drawBackground(self, gc):
+        path_bg = gc.CreatePath()
+        w,h = self.GetClientSizeTuple()
+        path_bg.AddRectangle(0,0,w,h)
+        gc.SetBrush(wx.Brush("pink"))
+        gc.DrawPath(path_bg)
+
+
+    def _drawBMP(self, gc):
+        """draw (background) bitmap to graphics context"""
+        bmp = wx.BitmapFromImage(self._scaledImg)
+        size = bmp.GetSize()
+        gc.DrawBitmap(bmp, 0,0, size.width, size.height)
 
 
     def _drawLabels(self, gc):
         """draw labels with r,g,b or lux values""" 
-        #print "TEST: _drawLabels" 
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         font.SetWeight(wx.BOLD)
         gc.SetFont(font)
@@ -676,11 +736,24 @@ class ImagePanel(wx.Panel):
         gc.PopState()
 
 
-    def _drawBMP(self, gc):
-        """draw (background) bitmap to graphics context"""
-        bmp = wx.BitmapFromImage(self._scaledImg)
-        size = bmp.GetSize()
-        gc.DrawBitmap(bmp, 0,0, size.width, size.height)
+    def _getBitmapPath(self):
+        """show dialog to save bitmap file"""
+        path = self.parent.path
+        if path == '':
+            return ''
+        
+        dirname, filename = os.path.split(path)
+        filebase = os.path.splitext(filename)[0]
+        filedialog = wx.FileDialog(self,
+                          message = 'save image',
+                          defaultDir = dirname,
+                          defaultFile = filebase + '.bmp',
+                          wildcard = WX_IMAGE_WILDCARD,
+                          style = wx.SAVE)
+        if filedialog.ShowModal() == wx.ID_OK:
+            return filedialog.GetPath()
+        else:
+            return '' 
 
 
     def OnLeftDown(self, evt):
@@ -735,31 +808,26 @@ class ImagePanel(wx.Panel):
     
     def OnPaint(self, evt):
         """redraw image panel area"""
-        dc = wx.PaintDC(self)
-        try:
-            gc = wx.GraphicsContext.Create(dc)
-        except NotImplementedError:
-            dc.DrawText("This build of wxPython does not support the wx.GraphicsContext "
-                        "family of classes.",
-                        25, 25)
-            return
-
-        if self._scaledImg:
-            self._drawBMP(gc)
-
-        ## draw overlay
-        if self._labels != []:
-            self._drawLabels(gc)
+        dc = wx.BufferedPaintDC(self, self._Buffer)
+        return
+        if USE_BUFFERED_DC:
+            dc = wx.BufferedPaintDC(self, self._Buffer)
+        else:
+            dc = wx.PaintDC(self)
+            dc.DrawBitmap(self._Buffer,0,0)
 
 
-    def resizeImage(self, evt):
+    def OnSize(self, evt):
+        """create new buffer and update window"""
+        size = self.GetClientSizeTuple()
+        self._Buffer = wx.EmptyBitmap(*size)
+        self.resizeImage(size)
+        self.UpdateDrawing()
+
+
+    def resizeImage(self, size):
         """scale image to fit frame proportionally"""
-        self.size = evt.GetSize()
-        self.scaleImage()
-    
-    
-    def scaleImage(self):
-        """scale image to fit frame"""
+        self.size = size
         if not self.img:
             return
         w,h = self.img.GetSize()
@@ -773,35 +841,70 @@ class ImagePanel(wx.Panel):
                     self._scaledImg = self.img.Scale( int(w/self._scale), int(h/self._scale) )
                 else:
                     self._scaledImg = self.img
-                #self.setBitmap()
+            self.SetSize(self._scaledImg.GetSize())
             self.Refresh()
+   
+
+    def saveBitmap(self, path=''):
+        """save buffer image to file"""
+        if path == '':
+            path = self._getBitmapPath()
+
+        if path == '':
+            return
+
+        ext = os.path.splitext(path)[1]
+        ext = ext.lower()
+        format = WX_IMAGE_FORMATS.get(ext, wx.BITMAP_TYPE_BMP)
+        
+        fw,fh = self.GetSize()
+        try:
+            img = self._Buffer.ConvertToImage()
+            w,h = img.GetSize()
+            if w > fw:
+                img = img.Size((fw,h), (0,0))
+            elif h > fh:
+                img = img.Size((w,fh), (0,0))
+            img.SaveFile(path, format)
+        except Exception, err:
+            msg = "Error saving image:\n%s\n%s" % (str(err), traceback.format_exc())
+            self.parent.showError(msg)
     
-
-    def setBitmap(self):
-        """UNUSED - convert scale image to new bitmap graphic"""
-        if self.bmp:
-            self.bmp.Destroy()
-        self.bmp = wx.StaticBitmap(self,wx.ID_ANY,wx.BitmapFromImage(self._scaledImg))
-        #self.bmp.Bind(wx.EVT_MOTION, self.OnMouseMotion)
-
 
     def setImage(self, img):
         """set wx.Image"""
         self.img = img
-        self.scaleImage()
-        self.Update()
+        self.OnSize(None)
+        ## call parent.Layout() to force resize of panel
+        self.parent.Layout()
+
+
+    def UpdateDrawing(self):
+        """updates drawing when needed (not by system)"""
+        dc = wx.BufferedDC(wx.ClientDC(self), self._Buffer)
+        self.Draw(dc)
+        return
+        if USE_BUFFERED_DC:
+            dc = wx.BufferedDC(wx.ClientDC(self), self._Buffer)
+            self.Draw(dc)
+        else:
+            dc = wx.MemoryDC()
+            dc.SelectObject(self._Buffer)
+            self.Draw(dc)
+            wx.ClientDC(self).DrawBitmap(self._Buffer, 0,0)
 
 
 
-class ImageFrame(wx.Frame):
+class wxFalsecolorFrame(wx.Frame):
 
     def __init__(self, args=[]):
         wx.Frame.__init__(self,None,title = "wxImage - Radiance Picture Viewer")
         
         ## menu
         self._addMenu()
+        
         ## image display
-        self.picturepanel = ImagePanel(self,style = wx.SUNKEN_BORDER)
+        self.picturepanel = ImagePanel(self)
 
         ## buttons
         self._doButtonLayout()
@@ -819,10 +922,7 @@ class ImageFrame(wx.Frame):
         self.path = ""
         self.filename = ""
 
-        if ImageFile:
-            self._ra2tiff = False
-        else:
-            self._ra2tiff = self._searchBinary("ra2tiff")
+        self._ra2tiff = self._searchBinary("ra2tiff")
 
         self.Size = (800,600)
         
@@ -858,22 +958,6 @@ class ImageFrame(wx.Frame):
         self.menubar.Append(self.file, '&File')
         self.fileOpen = self.file.Append(wx.ID_ANY, '&Open file')
         self.Bind(wx.EVT_MENU, self.onLoadImage, self.fileOpen)
-
-
-    def _buildSaveAsWildcard(self):
-        """compile wildcard string based on available converters
-        """
-        wildcard = ["HDR file|*.hdr"]
-        if ImageFile:
-            wildcard.append("BMP file|*.bmp|GIF file|*.gif|JPEG file|*.jpg")
-            wildcard.append("PDF file|*.pdf|PNG file|*.png|PPM file|*.ppm")
-            wildcard.append("TIFF file|*.tiff|XBM file|*.xbm")
-        else:
-            wildcard.append("BMP file|*.bmp|PPM file|*.ppm")
-            if self._ra2tiff:
-                wildcard.append("TIF file|*.tif")
-        wildcard.append("PIC (old)|*.pic")
-        return "|".join(wildcard)
 
 
     def _checkCmdArgs(self, args):
@@ -926,6 +1010,12 @@ class ImageFrame(wx.Frame):
             return "%s" % n
 
 
+    def getFrameSize(self):
+        """return available size for image frame"""
+        w,h = self.GetClientSize()
+        return (w-130,h)
+
+
     def getRGBVAt(self, pos):
         """return pixel value at position"""
         if self.rgbeImg:
@@ -946,7 +1036,10 @@ class ImageFrame(wx.Frame):
         """create instance of falsecolor image from <path>"""
         self.reset()
         self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-	self.rgbeImg = RGBEImage(self, ["-d", "-i", path] + args)
+        fcargs = ["-i", path] + args
+        if DEBUG:
+            fcargs = ["-d"] + fcargs
+	self.rgbeImg = RGBEImage(self, fcargs)
         self.rgbeImg.readImageData(path)
         if self.rgbeImg.error:
             msg = "Error loading image:\n%s" % self.rgbeImg.error
@@ -987,7 +1080,8 @@ class ImageFrame(wx.Frame):
         """save bmp image to file"""
         dirname, filename = os.path.split(self.path)
         filebase = os.path.splitext(filename)[0]
-        formats = self._buildSaveAsWildcard()
+        #formats = "|".join(["HDR file|*.hdr", WX_IMAGE_WILDCARD, "PIC (old)|*.pic"])
+        formats = "|".join(["HDR file|*.hdr", WX_IMAGE_WILDCARD, "PPM file|*.ppm"])
         filedialog = wx.FileDialog(self,
                           message = 'save image',
                           defaultDir = dirname,
@@ -1000,6 +1094,8 @@ class ImageFrame(wx.Frame):
             if result != True:
                 msg = "Error saving image:\n" + self.rgbeImg.error
                 self.showError(msg)
+            else:
+                self.statusbar.SetStatusText("saved file '%s'" % path)
 
 
     def reset(self):
@@ -1031,7 +1127,20 @@ class ImageFrame(wx.Frame):
 
     def _searchBinary(self,bname):
         """try to find <bname> in search path"""
-        #TODO
+        paths = os.environ['PATH']
+        extensions = ['']
+        try:
+            if os.name == 'nt':
+                extensions = os.environ['PATHEXT'].split(os.pathsep)
+            for path in paths.split(os.pathsep):
+                for ext in extensions:
+                    binpath = os.path.join(path,bname) + ext
+                    if os.path.exists(binpath):
+                        return binpath
+        except Exception, err:
+            traceback.print_exc(file=sys.stderr) 
+            return False
+        ## if nothing was found return False
         return False
 
 
@@ -1091,6 +1200,7 @@ class ImageFrame(wx.Frame):
                     value = "%s  value=%s lux" % (value,self.formatNumber(v)) 
             self.statusbar.SetStatusText("'%s':   x,y=(%d,%d)   %s" % (self.filename, pos[0],pos[1], value))
 
+
     def updatePicturePanel(self):
         """recreate BMP image"""
         try:
@@ -1111,10 +1221,9 @@ class ImageFrame(wx.Frame):
 if __name__ == "__main__":   
     try:
         app = wx.App(redirect = False)
-        frame = ImageFrame(sys.argv[1:])
+        frame = wxFalsecolorFrame(sys.argv[1:])
         app.MainLoop()
     except Exception, e:
-        import traceback
         traceback.print_exc()
         print "\npress return to close window ..."
         raw_input()
