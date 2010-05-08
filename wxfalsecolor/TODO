@@ -4,6 +4,8 @@ KNOWN ISSUES
 
 * wxfalsecolor does not do background images (-p or -ip)
 
+* labels shift on falsecolor conversion by legend offset
+
 
 USABILITY
 =========

@@ -1,0 +1,288 @@
+##
+## rgbeimage.py - part of wxfalsecolor
+##
+## $Id$
+## $URL$
+
+import os
+import array
+import cStringIO
+import traceback
+import wx
+from falsecolor2 import FalsecolorImage
+
+WX_IMAGE_WILDCARD = "BMP file|*.bmp|JPEG file|*.jpg|PNG file|*.png|TIFF file|*.tif|PNM file|*.pnm" 
+WX_IMAGE_FORMATS = {".bmp":  wx.BITMAP_TYPE_BMP,
+                    ".jpg":  wx.BITMAP_TYPE_JPEG,
+                    ".jpeg": wx.BITMAP_TYPE_JPEG,
+                    ".png":  wx.BITMAP_TYPE_PNG,
+                    ".tif":  wx.BITMAP_TYPE_TIF,
+                    ".tiff": wx.BITMAP_TYPE_TIF,
+                    ".pnm":  wx.BITMAP_TYPE_PNM}
+
+class RGBEImage(FalsecolorImage):
+    """extends FalsecolorImage with interactive methods"""
+
+    def __init__(self, wxparent, *args):
+        self.wxparent = wxparent
+        self._array = []
+        self._arrayTrue = False
+        self.legendoffset = (0,0)
+        self.legendpos = "leftbottom"
+        FalsecolorImage.__init__(self, *args)
+
+
+    def doFalsecolor(self, *args, **kwargs):
+        """set legendoffset after falsecolor conversion"""
+        FalsecolorImage.doFalsecolor(self, *args, **kwargs)
+        if not self.error:
+            self.legendoffset = (0,0)
+            if self.legend.position.startswith("W"):
+                self.legendoffset = (self.legend.width,0)
+            elif self.legend.position.startswith("N"):
+                self.legendoffset = (0,self.legend.height)
+
+
+    def getPValueLines(self):
+        """run pvalue on self._input to get "x,y,r,g,b" for each pixel"""
+        cmd = "pvalue -o -h -H"
+        if os.name == "nt":
+            path = self._createTempFileFromCmd(cmd, self._input)
+            f = open(path, 'r')
+            text = f.read()
+            f.close()
+        else:
+	    text = self._popenPipeCmd(cmd, self._input)
+
+	if self.error:
+            return False
+        else:
+            return text
+
+
+    def getRGBVAt(self, pos):
+        """Return r,g,b values at <pos> or -1 if no values are available"""
+        if self._array == []:
+            return (-1,-1,-1,-1)
+        x,y = pos
+
+        x -= self.legendoffset[0]
+        y -= self.legendoffset[1]
+        if x < 0 or y < 0:
+            return (-1,-1,-1,-1)
+        if x < self._resolution[0] and y < self._resolution[1]:
+            return self._array[y][x]
+        return (-1,-1,-1,-1)
+        
+    
+    def getRGBVAverage(self, start, end):
+        """calculate and return average (r,g,b,v) for rectangle"""
+        rgbv = []
+        for y in range(start[1],end[1]+1):
+            for x in range(start[0],end[0]+1):
+                r,g,b,v = self.getRGBVAt((x,y))
+                if r > 0:
+                    rgbv.append((r,g,b,v))
+        if len(rgbv) > 0:
+            r_avg = sum([t[0] for t in rgbv]) / len(rgbv)
+            g_avg = sum([t[1] for t in rgbv]) / len(rgbv)
+            b_avg = sum([t[2] for t in rgbv]) / len(rgbv)
+            v_avg = sum([t[3] for t in rgbv]) / len(rgbv)
+            return (r_avg,g_avg,b_avg,v_avg)
+        else:
+            return (-1,-1,-1,-1)
+
+
+    def getValueAt(self, pos):
+        """Return Lux value at <pos> or -1 if no values are available"""
+        if not self.isIrridiance():
+            return -1
+        else:
+            r,g,b,v = self.getRGBVAt(pos)
+            return v
+
+
+    def hasArrayData(self, wxparent):
+        """read pixel data into array of (r,g,b,v) values"""
+        if self._arrayTrue:
+            return True
+
+        if self._array == []:
+            ## data not read yet
+            return self.readArrayDataBIN(wxparent)
+            #return self.readArrayData(wxparent)
+        
+
+    def readArrayData(self, wxparent):
+        """read pixel data into array of (r,g,b,v) values"""
+        xres, yres = self.getImageResolution()
+        
+        ## start modal dialog to keep user informed
+        keepGoing = True
+        dlg = wx.ProgressDialog("reading pixel values ...",
+                                "reading raw data ...",
+                                maximum = yres+1,
+                                parent = wxparent,
+                                style = wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME|wx.PD_REMAINING_TIME)
+        
+        lines = self.getPValueLines()
+        if lines == False:
+            dlg.Destroy()
+            msg = "Error reading pixel values:\n%s" % self.error
+            self.showError(msg)
+            return False
+        
+        self._array = []
+        scanline = []
+        lineno = 0
+        for line in lines.split("\n"):
+            try:
+                x,y,r,g,b = line.split()
+                r = float(r)
+                g = float(g)
+                b = float(b)
+                if self._irridiance:
+                    v = (0.265*r+0.67*g+0.065*b)*self.mult
+                else:
+                    v = -1
+                scanline.append((r,g,b,v))
+            except:
+                pass
+            if len(scanline) == xres:
+                self._array.append(scanline)
+                scanline = []
+                lineno += 1
+                if lineno % 30 == 0:
+                    try:
+                        (keepGoing, foo) = dlg.Update(lineno, "converting image data ...")
+                    except:
+                        pass
+            if keepGoing == False:
+                dlg.Destroy()
+                self._array = []
+                return
+        dlg.Destroy()
+        if len(self._array) != yres:
+            return False
+        else:
+            self._arrayTrue = True
+            return True
+
+
+    def readArrayDataBIN(self, wxparent):
+        """read binary pixel data into array of (r,g,b,v) values"""
+        xres,yres = self.getImageResolution()
+        keepGoing = True
+        dlg = wx.ProgressDialog("reading pixel values ...",
+                                "reading raw data ...",
+                                maximum = 6,
+                                parent = wxparent,
+                                style = wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME|wx.PD_REMAINING_TIME)
+
+        arr_red   = array.array('d')
+        arr_green = array.array('d')
+        arr_blue  = array.array('d')
+        for i,channel in enumerate([(arr_red,"r"),(arr_green,"g"),(arr_blue,"b")]):
+            arr,c = channel 
+            (keepGoing, foo) = dlg.Update(i+1, "reading channel %s ..." % c.upper())
+            if keepGoing == False:
+                dlg.Destroy()
+                self._array = []
+                return
+            cmd = "pvalue -o -dd -h -H -p%s" % c.upper()
+            data = self._popenPipeCmd(cmd, self._input)
+            if self.error:
+                self._readArrayError(dlg, "Error reading pixel values:\n%s" % self.error)
+                return False
+            else:
+                arr.fromstring(data)
+                if len(arr) != xres*yres:
+                    self._readArrayError(dlg, "Error: wrong number of values (x,y=%d,%d arr=%d)" % (xres,yres,len(arr)))
+                    return False
+        
+        ## calculate v from r,g,b 
+        (keepGoing, foo) = dlg.Update(4, "calculating values ...")
+        if keepGoing == False:
+            dlg.Destroy()
+            self._array = []
+            return
+        arr_val = [(arr_red[i]*0.265+arr_green[i]*0.67+arr_blue[i]*0.065)*179 for i in range(len(arr_red))]
+        
+        ## convert to array or lines
+        dlg.Update(5, "building scanlines ...")
+        pixels = zip(arr_red,arr_green,arr_blue,arr_val)
+        self._array = []
+        for y in range(yres):
+            self._array.append(pixels[y*xres:(y+1)*xres])
+        #dlg.Update(6, "Done")
+        dlg.Destroy()
+        return True
+
+
+    def _readArrayError(self, dlg, msg):
+        """show error message and set self._array to not empty"""
+        dlg.Destroy()
+        self.showError(msg)
+        self._array = [msg]
+
+
+    def saveToAny(self, path):
+        """convert self.data to image format supported by wx"""
+        ext = os.path.splitext(path)[1]
+        ext = ext.lower()
+        format = WX_IMAGE_FORMATS.get(ext, wx.BITMAP_TYPE_BMP)
+        ppm = self.toPPM()
+        io = cStringIO.StringIO(ppm)
+        img = wx.ImageFromStream(io)
+        img.SaveFile(path, format)
+
+
+    def saveToFile(self, path):
+        """convert image and save to file <path>"""
+        pathext = os.path.splitext(path)[1]
+        pathext = pathext.lower()
+        try:
+            data = None
+            if pathext == ".hdr" or pathext == ".pic":
+                data = self.data
+            elif pathext == ".ppm":
+                data = self.toPPM()
+            else:
+                self.saveToAny(path)
+            
+            if data:
+                f = open(path, 'wb')
+                f.write(data)
+                f.close()
+            return True
+
+        except Exception, err:
+            self.error = traceback.format_exc()
+            return False
+
+        
+    def saveToTif(self, path, data=''):
+        """convert data to TIF file"""
+        if data == '':
+            data = self.data
+        cmd = str("ra_tiff -z - \"%s\"" % path) 
+        self._popenPipeCmd(cmd, self.data)
+
+
+    def showError(self, msg):
+        """display dialog with error message"""
+        dlg = wx.MessageDialog(self.wxparent, message=msg, caption="Error", style=wx.OK|wx.ICON_ERROR)
+        dlg.ShowModal()
+        dlg.Destroy()
+
+
+    def showWarning(self, msg):
+        """display dialog with error message"""
+        dlg = wx.MessageDialog(self.wxparent, message=msg, caption="Warning", style=wx.YES_NO|wx.ICON_WARN)
+        result == dlg.ShowModal()
+        dlg.Destroy()
+        if result == wx.ID_OK:
+            return True
+        else:
+            return False
+
