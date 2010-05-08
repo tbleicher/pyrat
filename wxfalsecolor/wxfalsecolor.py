@@ -18,6 +18,7 @@ THIS SOFTWARE IS PROVIDED BY THOMAS BLEICHER ''AS IS'' AND ANY
 EXPRESSOR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
 PARTICULAR PURPOSE ARE DISCLAIMED.
+
 IN NO EVENT SHALL THOMAS BLEICHER OR CONTRIBUTORS BE LIABLE FOR
 ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
 CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
@@ -36,6 +37,7 @@ official policies, either expressed or implied, of Thomas Bleicher."""
 import sys,os
 import cStringIO
 import traceback
+import array
 
 import wx
 import wx.lib.foldpanelbar as fpb
@@ -76,6 +78,23 @@ class RGBEImage(FalsecolorImage):
                 self.legendoffset = (self.legend.width,0)
             elif self.legend.position.startswith("N"):
                 self.legendoffset = (0,self.legend.height)
+
+
+    def getPValueLines(self):
+        """run pvalue on self._input to get "x,y,r,g,b" for each pixel"""
+        cmd = "pvalue -o -h -H"
+        if os.name == "nt":
+            path = self._createTempFileFromCmd(cmd, self._input)
+            f = open(path, 'r')
+            text = f.read()
+            f.close()
+        else:
+	    text = self._popenPipeCmd(cmd, self._input)
+
+	if self.error:
+            return False
+        else:
+            return text
 
 
     def getRGBVAt(self, pos):
@@ -127,9 +146,10 @@ class RGBEImage(FalsecolorImage):
 
         if self._array == []:
             ## data not read yet
-            return self.readArrayData(wxparent)
+            return self.readArrayDataBIN(wxparent)
+            #return self.readArrayData(wxparent)
         
-        
+
     def readArrayData(self, wxparent):
         """read pixel data into array of (r,g,b,v) values"""
         xres, yres = self.getImageResolution()
@@ -184,6 +204,63 @@ class RGBEImage(FalsecolorImage):
         else:
             self._arrayTrue = True
             return True
+
+
+    def readArrayDataBIN(self, wxparent):
+        """read binary pixel data into array of (r,g,b,v) values"""
+        xres,yres = self.getImageResolution()
+        keepGoing = True
+        dlg = wx.ProgressDialog("reading pixel values ...",
+                                "reading raw data ...",
+                                maximum = 6,
+                                parent = wxparent,
+                                style = wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME|wx.PD_REMAINING_TIME)
+
+        arr_red   = array.array('d')
+        arr_green = array.array('d')
+        arr_blue  = array.array('d')
+        for i,channel in enumerate([(arr_red,"r"),(arr_green,"g"),(arr_blue,"b")]):
+            arr,c = channel 
+            (keepGoing, foo) = dlg.Update(i+1, "reading channel %s ..." % c.upper())
+            if keepGoing == False:
+                dlg.Destroy()
+                self._array = []
+                return
+            cmd = "pvalue -o -dd -h -H -p%s" % c.upper()
+            data = self._popenPipeCmd(cmd, self._input)
+            if self.error:
+                self._readArrayError(dlg, "Error reading pixel values:\n%s" % self.error)
+                return False
+            else:
+                arr.fromstring(data)
+                if len(arr) != xres*yres:
+                    self._readArrayError(dlg, "Error: wrong number of values (x,y=%d,%d arr=%d)" % (xres,yres,len(arr)))
+                    return False
+        
+        ## calculate v from r,g,b 
+        (keepGoing, foo) = dlg.Update(4, "calculating values ...")
+        if keepGoing == False:
+            dlg.Destroy()
+            self._array = []
+            return
+        arr_val = [(arr_red[i]*0.265+arr_green[i]*0.67+arr_blue[i]*0.065)*179 for i in range(len(arr_red))]
+        
+        ## convert to array or lines
+        dlg.Update(5, "building scanlines ...")
+        pixels = zip(arr_red,arr_green,arr_blue,arr_val)
+        self._array = []
+        for y in range(yres):
+            self._array.append(pixels[y*xres:(y+1)*xres])
+        #dlg.Update(6, "Done")
+        dlg.Destroy()
+        return True
+
+
+    def _readArrayError(self, dlg, msg):
+        """show error message and set self._array to not empty"""
+        dlg.Destroy()
+        self.showError(msg)
+        self._array = [msg]
 
 
     def saveToAny(self, path):
@@ -425,31 +502,45 @@ class FalsecolorControlPanel(wx.Panel):
 
 
 
+class MyFoldPanelBar(fpb.FoldPanelBar):
+    """base for FoldPanelBar in controlls panel"""
+    
+    def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize, *args,**kwargs):
+        fpb.FoldPanelBar.__init__(self, parent, id, pos, size, *args, **kwargs)
+
+    def OnPressCaption(self, event):
+        """collapse all other panels on EVT_CAPTIONBAR event"""
+        fpb.FoldPanelBar.OnPressCaption(self, event)
+        for i in range(self.GetCount()):
+            p = self.GetFoldPanel(i)
+            if p != event._tag:
+                self.Collapse(p)
+
+
 
 class FoldableControlsPanel(wx.Panel):
     """combines individual feature panels"""
     
-    def __init__(self, parent, id=wx.ID_ANY, title="", pos=wx.DefaultPosition,
-                 style=wx.DEFAULT_FRAME_STYLE):
+    def __init__(self, parent, style=wx.DEFAULT_FRAME_STYLE):
 
-        wx.Panel.__init__(self, parent, id)
+        wx.Panel.__init__(self, parent, id=wx.ID_ANY)
         self.parent = parent
         self.SetSize((130,350))
         self.CreateFoldBar()
         self.Bind(wx.EVT_SIZE, self.setBarSize)
-        
+    
 
     def CreateFoldBar(self, vertical=True):
-        bar = fpb.FoldPanelBar(self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize,
-                           fpb.FPB_DEFAULT_STYLE|fpb.FPB_VERTICAL)
+                           
+        bar = MyFoldPanelBar(self, style=fpb.FPB_DEFAULT_STYLE|fpb.FPB_VERTICAL)
 
         item = bar.AddFoldPanel("ximage", collapsed=False)
         pc_controls = self._buildXimageButtons(item)
-        bar.AddFoldPanelWindow(item, pc_controls)
+        bar.AddFoldPanelWindow(item, pc_controls, flags=fpb.FPB_ALIGN_WIDTH)
         
-        item = bar.AddFoldPanel("falsecolor", collapsed=False)
+        item = bar.AddFoldPanel("falsecolor", collapsed=True)
         self.fcpanel = FalsecolorControlPanel(item, self.parent)
-        bar.AddFoldPanelWindow(item, self.fcpanel)
+        bar.AddFoldPanelWindow(item, self.fcpanel, flags=fpb.FPB_ALIGN_WIDTH)
         
         item = bar.AddFoldPanel("misc", collapsed=True)
         pc_controls = self._buildMiscButtons(item)
@@ -498,8 +589,8 @@ class FoldableControlsPanel(wx.Panel):
     
     
     def _buildXimageButtons(self, panel):
+        """creates layout of ximage buttons"""
         xipanel = wx.Panel(panel,wx.ID_ANY,size=(-1,35))
-        #xipanel.SetBackgroundColour(wx.RED)
         xisizer = wx.BoxSizer(wx.VERTICAL)
         
         self.showValues = wx.CheckBox(xipanel, wx.ID_ANY, "show values")
@@ -511,6 +602,10 @@ class FoldableControlsPanel(wx.Panel):
         clearButton.Bind(wx.EVT_BUTTON, self.OnClearLabels)
         xisizer.Add(clearButton, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
         
+        ## spacer
+        spacer = wx.Panel(xipanel, wx.ID_ANY, size=(-1,5))
+        xisizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
+
         saveBitmap = wx.Button(xipanel, wx.ID_ANY, "save bitmap")
         saveBitmap.Bind(wx.EVT_BUTTON, self.OnSaveBitmap)
         xisizer.Add(saveBitmap, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
@@ -1208,7 +1303,8 @@ class wxFalsecolorFrame(wx.Frame):
         info.Description = "cross-platform GUI frontend for falsecolor"
         info.WebSite = ("http://sites.google.com/site/tbleicher/radiance/wxfalsecolor", "wxfalsecolor home page")
         info.Developers = ["Thomas Bleicher", "Axel Jacobs"]
-        info.License = wordwrap(LICENSE, 500, wx.ClientDC(self))
+        lines = [" ".join(line.split()) for line in LICENSE.split("\n\n")]
+        info.License = wordwrap("\n\n".join(lines), 500, wx.ClientDC(self))
         wx.AboutBox(info)
 
 

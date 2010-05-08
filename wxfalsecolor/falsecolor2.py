@@ -642,24 +642,6 @@ class FalsecolorImage(FalsecolorBase):
         return self.legend.formatNumber(n)
 
 
-    def getPValueLines(self):
-        """run pvalue on self._input to get "x,y,r,g,b" for each pixel"""
-        #TODO: test '-df' float format option
-        cmd = "pvalue -o -h -H"
-        if os.name == "nt":
-            path = self._createTempFileFromCmd(cmd, self._input)
-            f = open(path, 'r')
-            text = f.read()
-            f.close()
-        else:
-	    text = self._popenPipeCmd(cmd, self._input)
-
-	if self.error:
-            return False
-        else:
-            return text
-
-
     def getImageResolution(self):
         """return image size"""
         return self._resolution
