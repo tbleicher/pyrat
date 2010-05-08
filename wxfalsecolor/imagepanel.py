@@ -15,7 +15,7 @@ class FileDropTarget(wx.FileDropTarget):
     """implement file drop feature for ImagePanel"""
     def __init__(self, app):
         wx.FileDropTarget.__init__(self)
-        self.app = app
+        self.wxapp = app
 
     def OnDropFiles(self, x, y, filenames):
         """validate image before passing it on to self.app.loadImage()"""
@@ -25,10 +25,10 @@ class FileDropTarget(wx.FileDropTarget):
         rgbeImg.readImageData(path)
         if rgbeImg.error:
             msg = "Error loading image.\nFile: %s\nError: %s" % (path,rgbeImg.error)
-            self.app.showError(msg)
+            self.wxapp.showError(msg)
         else:
             ## now load for real
-            self.app.loadImage(path)
+            self.wxapp.loadImage(path)
         
 
 class ImagePanel(wx.Panel):
@@ -135,7 +135,7 @@ class ImagePanel(wx.Panel):
         """draw (background) bitmap to graphics context"""
         bmp = wx.BitmapFromImage(self._scaledImg)
         size = bmp.GetSize()
-        gc.DrawBitmap(bmp, 0,0, size.width, size.height)
+        gc.DrawBitmap(bmp, 0, 0, size.width, size.height)
 
 
     def _drawDraggingFrame(self,gc):
@@ -281,14 +281,10 @@ class ImagePanel(wx.Panel):
         
     
     def OnPaint(self, evt):
-        """redraw image panel area"""
+        """refresh image panel area on screen"""
+        ## copy image in buffer to dc
         dc = wx.BufferedPaintDC(self, self._Buffer)
-        return
-        if USE_BUFFERED_DC:
-            dc = wx.BufferedPaintDC(self, self._Buffer)
-        else:
-            dc = wx.PaintDC(self)
-            dc.DrawBitmap(self._Buffer,0,0)
+        ## dc is copied to screen automatically; no need for Draw() etc.
 
 
     def OnSize(self, evt):
@@ -357,14 +353,5 @@ class ImagePanel(wx.Panel):
         """updates drawing when needed (not by system)"""
         dc = wx.BufferedDC(wx.ClientDC(self), self._Buffer)
         self.Draw(dc)
-        return
-        if USE_BUFFERED_DC:
-            dc = wx.BufferedDC(wx.ClientDC(self), self._Buffer)
-            self.Draw(dc)
-        else:
-            dc = wx.MemoryDC()
-            dc.SelectObject(self._Buffer)
-            self.Draw(dc)
-            wx.ClientDC(self).DrawBitmap(self._Buffer, 0,0)
 
 

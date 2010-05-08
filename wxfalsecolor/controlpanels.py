@@ -8,11 +8,13 @@ import wx
 import wx.lib.foldpanelbar as fpb
 import wx.lib.buttons as buttons
 
+
+
 class FalsecolorControlPanel(wx.Panel):
 
-    def __init__(self, parent, parentapp, *args, **kwargs):
+    def __init__(self, parent, wxapp, *args, **kwargs):
         wx.Panel.__init__(self, parent, *args, **kwargs)
-        self.parentapp = parentapp
+        self.wxapp = wxapp
         
         self.positions = ['WS','W','WN','NW','N','NE','EN','E','ES','SE','S','SW']
         self._buildFCButtons()
@@ -26,10 +28,10 @@ class FalsecolorControlPanel(wx.Panel):
         self.fc_type.SetStringSelection("color fill")
         self.Bind(wx.EVT_CHOICE, self.updateFCButton, self.fc_type)
         
-        self.legpos = wx.Choice(self, wx.ID_ANY, choices=self.positions, size=(50,-1))
+        self.legpos = wx.Choice(self, wx.ID_ANY, choices=self.positions, size=(60,-1))
         self.legpos.SetStringSelection("WS")
         self.Bind(wx.EVT_CHOICE, self.updatePosition, self.legpos)
-        self.inside = wx.CheckBox(self, wx.ID_ANY, 'inside')
+        self.inside = wx.CheckBox(self, wx.ID_ANY, 'in')
         self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.inside)
         
         self.label = wx.TextCtrl(self, wx.ID_ANY, "NITS",  size=(50,-1))
@@ -101,7 +103,7 @@ class FalsecolorControlPanel(wx.Panel):
 
     def doFalsecolor(self, event):
         """start conversion to falsecolor and update button"""
-        if self.parentapp.rgbe2fc(event) == True:
+        if self.wxapp.rgbe2fc(event) == True:
             self._cmdLine = " ".join(self.getFCArgs())
             self.doFCButton.SetLabel("update fc")
             self.doFCButton.Disable()
@@ -109,7 +111,7 @@ class FalsecolorControlPanel(wx.Panel):
         else:
             self.doFCButton.SetLabel("update fc")
             self.doFCButton.Enable()
-            self.doFCButton.SetBackgroundColour(wx.RED)
+            self.doFCButton.SetBackgroundColour(wx.Colour(255,140,0))
         self.doFCButton.Refresh()
 
 
@@ -164,7 +166,7 @@ class FalsecolorControlPanel(wx.Panel):
             if self._cmdLine != newCmd:
                 self.doFCButton.SetLabel("update fc")
                 self.doFCButton.Enable()
-                self.doFCButton.SetBackgroundColour(wx.RED)
+                self.doFCButton.SetBackgroundColour(wx.Colour(255,140,0))
             else:
                 self.doFCButton.Disable()
                 self.doFCButton.SetBackgroundColour(wx.WHITE)
@@ -183,6 +185,183 @@ class FalsecolorControlPanel(wx.Panel):
             self.legH.SetValue("50")
 
 
+
+class MiscControlPanel(wx.Panel):
+    
+    def __init__(self, parent, wxapp, *args, **kwargs):
+        wx.Panel.__init__(self, parent, *args, **kwargs)
+        self.wxapp = wxapp
+        self._layout()
+
+
+    def _layout(self):
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        showHeader = wx.Button(self, wx.ID_ANY, "show header")
+        showHeader.Bind(wx.EVT_BUTTON, self.OnShowHeader)
+        sizer.Add(showHeader, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
+        
+        about = wx.Button(self, wx.ID_ANY, "about")
+        about.Bind(wx.EVT_BUTTON, self.OnAbout)
+        sizer.Add(about, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
+        
+        ## add spacer and set size
+        spacer = wx.Panel(self, wx.ID_ANY, size=(-1,5))
+        sizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
+        self.SetSizer(sizer)
+        self.SetInitialSize()
+
+
+    def OnAbout(self, event):
+        self.wxapp.showAboutDialog()
+
+    def OnShowHeader(self, event):
+        self.wxapp.showHeaders()
+
+
+
+
+class ViewControlPanel(wx.Panel):
+    
+    def __init__(self, parent, wxapp, *args, **kwargs):
+        wx.Panel.__init__(self, parent, *args, **kwargs)
+        self.wxapp = wxapp
+        self._layout()
+    
+    
+    def _layout(self):
+        """creates layout of ximage buttons"""
+        self.showValues = wx.Button(self, wx.ID_ANY, "show values")
+        self.showValues.Bind(wx.EVT_BUTTON, self.OnShowValues)
+
+        self.acuity = wx.CheckBox(self, wx.ID_ANY, 'acuity loss')
+        self.glare = wx.CheckBox(self, wx.ID_ANY, 'veiling glare')
+        self.contrast = wx.CheckBox(self, wx.ID_ANY, 'contrast')
+        self.colour = wx.CheckBox(self, wx.ID_ANY, 'color loss')
+        
+        self.exposure = wx.CheckBox(self, wx.ID_ANY, 'exp')
+        self.expvalue = wx.TextCtrl(self, wx.ID_ANY, "1", size=(50,-1))
+        self.linear = wx.CheckBox(self, wx.ID_ANY, 'linear response')
+        self.centre = wx.CheckBox(self, wx.ID_ANY, 'centre-w. avg')
+        
+        self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.acuity)
+        self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.glare)
+        self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.contrast)
+        self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.colour)
+        self.Bind(wx.EVT_CHECKBOX, self.OnExposure,        self.exposure)
+        self.Bind(wx.EVT_TEXT,     self.updatePcondButton, self.expvalue)
+        self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.linear)
+        self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.centre)
+
+        self.pcondButton = buttons.GenButton(self, wx.ID_ANY, label='apply pcond', size=(-1,24))
+        self.pcondButton.Bind(wx.EVT_BUTTON, self.OnDoPcond)
+        self.pcondButton.Disable()
+
+        saveBitmap = wx.Button(self, wx.ID_ANY, "save bitmap")
+        saveBitmap.Bind(wx.EVT_BUTTON, self.OnSaveBitmap)
+
+        layout = [(self.showValues,  None),
+                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)), None),
+                  (self.acuity,      None),
+                  (self.glare,       None),
+                  (self.contrast,    None),
+                  (self.colour,      None),
+                  (wx.Panel(self,wx.ID_ANY,size=(-1, 5)), None),
+                  (self.exposure, self.expvalue),
+                  (self.linear,      None),
+                  (self.centre,      None),
+                  (wx.Panel(self,wx.ID_ANY,size=(-1, 5)), None),
+                  (self.pcondButton, None), 
+                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)), None),
+                  (saveBitmap,       None),
+                  (wx.Panel(self,wx.ID_ANY,size=(-1, 5)), None)]
+                
+        ## create grid sizer
+        grid = wx.GridBagSizer(2,2)
+        for r,row in enumerate(layout):
+            c1,c2 = row
+            if c2:
+                grid.Add( c1, (r,0),        flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+                grid.Add( c2, (r,1),        flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+            else:
+                grid.Add( c1, (r,0), (1,2), flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+                
+        self.SetSizer(grid)
+        self.SetInitialSize()
+
+
+    def reset(self):
+        """set buttons to initial state"""
+        self.showValues.Enable()
+        self.showValues.SetLabel("load data")
+        
+        self.acuity.SetValue(False)
+        self.glare.SetValue(False)
+        self.contrast.SetValue(False)
+        self.colour.SetValue(False) 
+        self.exposure.SetValue(False)
+        self.expvalue.SetValue("1")
+        self.linear.SetValue(False)
+        self.centre.SetValue(False)
+        
+        self.pcondButton.Enable()
+        self.pcondButton.SetBackgroundColour(wx.WHITE)
+        
+
+    def getPcondArgs(self):
+        """collect pcond arguments and return as list"""
+        args = []
+        if self.acuity.GetValue():   args.append("-a");
+        if self.glare.GetValue():    args.append("-v");
+        if self.contrast.GetValue(): args.append("-s");
+        if self.colour.GetValue():   args.append("-c"); 
+        if self.linear.GetValue():   args.append("-l");
+        if self.centre.GetValue():   args.append("-w");
+        if self.exposure.GetValue():
+            args.append("-e")
+            args.append(self.expvalue.GetValue())
+        return args
+
+
+    def OnDoPcond(self, event):
+        """run pcond and update picturepanel"""
+        if self.wxapp.rgbeImg:
+            args = self.getPcondArgs()
+            if self.wxapp.rgbeImg.doPcond(args) == True:
+                self.wxapp.updatePicturePanel() 
+        self.pcondButton.Disable()
+        self.pcondButton.SetBackgroundColour(wx.WHITE)
+
+
+    def OnExposure(self, event):
+        """select 'linear' cb if exposure is enabled"""
+        if self.exposure.GetValue() == True:
+            self.linear.SetValue(True)
+        self.updatePcondButton(event)
+
+
+    def OnSaveBitmap(self, event):
+        self.wxapp.picturepanel.saveBitmap()
+
+
+    def OnShowValues(self, event):
+        """load data from image and clear labels"""
+        self.wxapp.picturepanel.clearLabels()
+        if self.wxapp.loadValues() == False:
+            self.showValues.SetLabel("no data")
+            self.showValues.Disable()
+        else:
+            self.showValues.SetLabel("clear labels")
+
+
+    def updatePcondButton(self, event):
+        self.pcondButton.Enable()
+        self.pcondButton.SetBackgroundColour(wx.Colour(255,140,0))
+
+
+
+
+
 class MyFoldPanelBar(fpb.FoldPanelBar):
     """base for FoldPanelBar in controlls panel"""
     
@@ -198,6 +377,7 @@ class MyFoldPanelBar(fpb.FoldPanelBar):
                 self.Collapse(p)
 
 
+
 class FoldableControlsPanel(wx.Panel):
     """combines individual feature panels"""
     
@@ -205,25 +385,25 @@ class FoldableControlsPanel(wx.Panel):
 
         wx.Panel.__init__(self, parent, id=wx.ID_ANY)
         self.parent = parent
-        self.SetSize((130,350))
-        self.CreateFoldBar()
+        self.SetSize((140,350))
+        self._layout()
         self.Bind(wx.EVT_SIZE, self.setBarSize)
     
 
-    def CreateFoldBar(self, vertical=True):
+    def _layout(self, vertical=True):
                            
         bar = MyFoldPanelBar(self, style=fpb.FPB_DEFAULT_STYLE|fpb.FPB_VERTICAL)
 
-        item = bar.AddFoldPanel("ximage", collapsed=False)
-        pc_controls = self._buildXimageButtons(item)
-        bar.AddFoldPanelWindow(item, pc_controls, flags=fpb.FPB_ALIGN_WIDTH)
+        item = bar.AddFoldPanel("display", collapsed=False)
+        self.displaycontrols = ViewControlPanel(item, self.parent)
+        bar.AddFoldPanelWindow(item, self.displaycontrols, flags=fpb.FPB_ALIGN_WIDTH)
         
         item = bar.AddFoldPanel("falsecolor", collapsed=True)
-        self.fcpanel = FalsecolorControlPanel(item, self.parent)
-        bar.AddFoldPanelWindow(item, self.fcpanel, flags=fpb.FPB_ALIGN_WIDTH)
+        self.fccontrols = FalsecolorControlPanel(item, self.parent)
+        bar.AddFoldPanelWindow(item, self.fccontrols, flags=fpb.FPB_ALIGN_WIDTH)
         
         item = bar.AddFoldPanel("misc", collapsed=True)
-        pc_controls = self._buildMiscButtons(item)
+        pc_controls = MiscControlPanel(item, self.parent)
         bar.AddFoldPanelWindow(item, pc_controls)
         
         if hasattr(self, "pnl"):
@@ -232,21 +412,6 @@ class FoldableControlsPanel(wx.Panel):
 
         size = self.GetClientSize()
         self.pnl.SetDimensions(0, 0, size.GetWidth(), size.GetHeight())
-
-    def _buildMiscButtons(self, parent):
-        panel = wx.Panel(parent,wx.ID_ANY,size=(-1,35))
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        about = wx.Button(panel, wx.ID_ANY, "about")
-        about.Bind(wx.EVT_BUTTON, self.OnAbout)
-        sizer.Add(about, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
-        
-        ## add spacer and set size
-        spacer = wx.Panel(panel, wx.ID_ANY, size=(-1,5))
-        sizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
-        panel.SetSizer(sizer)
-        panel.SetInitialSize()
-        return panel
 
 
     def _buildPcondButtons(self, panel):
@@ -266,78 +431,10 @@ class FoldableControlsPanel(wx.Panel):
         pcpanel.SetSizer(pcsizer)
         pcpanel.SetInitialSize()
         return pcpanel
-    
-    
-    def _buildXimageButtons(self, panel):
-        """creates layout of ximage buttons"""
-        xipanel = wx.Panel(panel,wx.ID_ANY,size=(-1,35))
-        xisizer = wx.BoxSizer(wx.VERTICAL)
-        
-        self.showValues = wx.CheckBox(xipanel, wx.ID_ANY, "show values")
-        self.showValues.Bind(wx.EVT_CHECKBOX, self.OnShowValues)
-        self.showValues.Disable()
-        xisizer.Add(self.showValues, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
-        
-        clearButton = wx.Button(xipanel, wx.ID_ANY, "clear labels")
-        clearButton.Bind(wx.EVT_BUTTON, self.OnClearLabels)
-        xisizer.Add(clearButton, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
-        
-        ## spacer
-        spacer = wx.Panel(xipanel, wx.ID_ANY, size=(-1,5))
-        xisizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
 
-        saveBitmap = wx.Button(xipanel, wx.ID_ANY, "save bitmap")
-        saveBitmap.Bind(wx.EVT_BUTTON, self.OnSaveBitmap)
-        xisizer.Add(saveBitmap, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
-        
-        ## spacer
-        spacer = wx.Panel(xipanel, wx.ID_ANY, size=(-1,5))
-        xisizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
-
-        xipanel.SetSizer(xisizer)
-        xipanel.SetInitialSize()
-        return xipanel
-
-
-    def disableShowValues(self):
-        self.showValues.SetValue(False)
-        self.showValues.Disable()
-
-    def enableFC(self, text=""):
-        self.fcpanel.enableFC(text)
-
-    def enableShowValues(self,status=False):
-        self.showValues.Enable()
-        self.showValues.SetValue(status)
-
-    def getFCArgs(self):
-        return self.fcpanel.getFCArgs()
-
-    def OnAbout(self, event):
-        self.parent.showAboutDialog()
-
-    def OnClearLabels(self, event):
-        self.parent.picturepanel.clearLabels()
-    
-    def OnCollapseMe(self, event):
-        item = self.pnl.GetFoldPanel(0)
-        self.pnl.Collapse(item)
-
-    def OnExpandMe(self, event):
-        self.pnl.Expand(self.pnl.GetFoldPanel(0))
-        self.pnl.Collapse(self.pnl.GetFoldPanel(1))
-
-    def OnSaveBitmap(self, event):
-        self.parent.picturepanel.saveBitmap()
-    
-    def OnShowValues(self, event):
-        self.parent.setShowValues(self.showValues.GetValue())
 
     def setBarSize(self, event):
         size = event.GetSize()
         self.pnl.SetDimensions(0, 0, size.GetWidth(), size.GetHeight())
         
-    def setFCLabel(self, text):
-        self.fcpanel.setFCLabel(text)
-
 

@@ -82,7 +82,6 @@ class wxFalsecolorFrame(wx.Frame):
         self.statusbar = self.CreateStatusBar()
 
         self.rgbeImg = None
-        self._array = []
         self.img = None
         self.path = ""
         self.filename = ""
@@ -158,8 +157,10 @@ class wxFalsecolorFrame(wx.Frame):
         self._addFileButtons()
         
         ## foldable controls panel
-        self.controls = FoldableControlsPanel(self, wx.ID_ANY)
-        self.panelSizer.Add(self.controls, proportion=1, flag=wx.EXPAND|wx.ALL, border=5)
+        self._foldpanel = FoldableControlsPanel(self, wx.ID_ANY)
+        self.fccontrols = self._foldpanel.fccontrols
+        self.displaycontrols = self._foldpanel.displaycontrols
+        self.panelSizer.Add(self._foldpanel, proportion=1, flag=wx.EXPAND|wx.ALL, border=5)
         
         ## 'quit' button
         quitbutton = wx.Button(self, wx.ID_EXIT, label='quit')
@@ -173,12 +174,6 @@ class wxFalsecolorFrame(wx.Frame):
             return self.rgbeImg.formatNumber(n)
         else:
             return str(n)
-
-
-    def getFrameSize(self):
-        """return available size for image frame"""
-        w,h = self.GetClientSize()
-        return (w-130,h)
 
 
     def getRGBVAt(self, pos):
@@ -210,16 +205,14 @@ class wxFalsecolorFrame(wx.Frame):
             msg = "Error loading image:\n%s" % self.rgbeImg.error
             self.showError(msg)
         else:
-            if self._showValues:
-                self.setShowValues(True)
             self.updatePicturePanel()
             if self.img:
                 self.path = path
                 self.filename = os.path.split(path)[1]
             if self.rgbeImg.isIrridiance():
-                self.controls.setFCLabel("Lux")
+                self.fccontrols.setFCLabel("Lux")
             self.saveButton.Enable()
-            self.controls.enableFC("convert fc")
+            self.fccontrols.enableFC("convert fc")
         self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
 
 
@@ -265,17 +258,14 @@ class wxFalsecolorFrame(wx.Frame):
 
     def reset(self):
         """reset array to inital (empty) values"""
-        self._array = []
-        self._arrayTrue = False
-        self._showValues = False
-        self.controls.enableShowValues()
+        self.displaycontrols.reset()
         self.picturepanel.clearLabels()
 
 
     def rgbe2fc(self,event):
         """convert Radiance RGBE image to wx.Bitmap"""
         self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-        args = self.controls.getFCArgs()
+        args = self.fccontrols.getFCArgs()
         self.rgbeImg.resetDefaults()
         self.rgbeImg.setOptions(args)
         self.rgbeImg.doFalsecolor()
@@ -309,29 +299,10 @@ class wxFalsecolorFrame(wx.Frame):
         return False
 
 
-    def setShowValues(self, show):
-        """set flag to display pixel values"""
-        if show == True:
-            if self.rgbeImg:
-                ## start reading image data
-                result = self.rgbeImg.hasArrayData(self)
-                if result == None:
-                    ## reading canceled by user
-                    self._showValues = False
-                    self.controls.enableShowValues()
-                elif result == True:
-                    ## data is now available
-                    self._showValues = True
-                    self.controls.enableShowValues(True)
-                elif result == False:
-                    ## error reading data
-                    self._showValues = True
-                    self.controls.disableShowValues()
-            else:
-                self._showValues = False
-        else:
-            self._showValues = False
- 
+    def loadValues(self):
+        """load luminance/illuminance data from image"""
+        return self.rgbeImg.hasArrayData(self)
+
 
     def showAboutDialog(self):
         """show dialog with license etc"""
@@ -354,11 +325,30 @@ class wxFalsecolorFrame(wx.Frame):
         dlg.ShowModal()
         dlg.Destroy()
 
+    
+    def showHeaders(self):
+        """display image headers in popup dialog"""
+        if not self.rgbeImg:
+            return
+        header = self.rgbeImg.getHeader()
+        if header == False:
+            self.showError("Image header not available!")
+            return
+        header2 = self.rgbeImg.getDataHeader()
+        if header2 and header != header2:
+            header += "\n\ncurrent:\n\n"
+            header += header2
+        
+        #XXX use StaticText to avoid line wrap and for highlight
+        dlg = wx.MessageDialog(self, message=header, caption="Image Header", style=wx.OK|wx.ICON_INFORMATION)
+        dlg.ShowModal()
+        dlg.Destroy()
+
 
     def showPixelValueAt(self, pos):
         """set pixel position of mouse cursor"""
         value = ""
-        if self.rgbeImg and self._showValues:
+        if self.rgbeImg:
             r,g,b,v = self.rgbeImg.getRGBVAt(pos)
             if r > 0:
                 value = "rgb=(%.3f,%.3f,%.3f)" % (r,g,b)
@@ -374,6 +364,7 @@ class wxFalsecolorFrame(wx.Frame):
             io = cStringIO.StringIO(ppm)
             self.img = wx.ImageFromStream(io)
             self.picturepanel.setImage(self.img)
+            self.picturepanel.rgbeImg = self.rgbeImg
         except:
             if self.rgbeImg.error:
                 msg = "Error creating falsecolor image:\n%s" % self.rgbeImg.error

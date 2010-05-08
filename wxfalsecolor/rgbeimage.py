@@ -4,7 +4,7 @@
 ## $Id$
 ## $URL$
 
-import os
+import os,sys
 import array
 import cStringIO
 import traceback
@@ -20,13 +20,16 @@ WX_IMAGE_FORMATS = {".bmp":  wx.BITMAP_TYPE_BMP,
                     ".tiff": wx.BITMAP_TYPE_TIF,
                     ".pnm":  wx.BITMAP_TYPE_PNM}
 
+
+
+
 class RGBEImage(FalsecolorImage):
     """extends FalsecolorImage with interactive methods"""
 
     def __init__(self, wxparent, *args):
         self.wxparent = wxparent
         self._array = []
-        self._arrayTrue = False
+        self._hasArray = False
         self.legendoffset = (0,0)
         self.legendpos = "leftbottom"
         FalsecolorImage.__init__(self, *args)
@@ -41,10 +44,43 @@ class RGBEImage(FalsecolorImage):
                 self.legendoffset = (self.legend.width,0)
             elif self.legend.position.startswith("N"):
                 self.legendoffset = (0,self.legend.height)
+    
+
+    def doPcond(self, args):
+        """condition image with pcond"""
+        if self.picture == "-":
+            path = self._createTempFile()
+        else:
+            path = self.picture
+        cmd = "pcond %s '%s'" % (" ".join(args), path)
+        try:
+            data = self._popenPipeCmd(cmd, None)
+            if data:
+                self.data = data
+                return True
+        except Exception, err:
+            msg = "pcond error:\n%s" % self.error
+            self.showError(msg)
+            return False
+
+
+    def getDataHeader(self):
+        return self.getHeader(self.data)
+
+
+    def getHeader(self, data=None):
+        """return header of input picture or data"""
+        if not data:
+            data = self._input
+        try:
+            header = data.split("\n\n")[0]
+            return header
+        except:
+            return False
 
 
     def getPValueLines(self):
-        """run pvalue on self._input to get "x,y,r,g,b" for each pixel"""
+        """UNUSED - run pvalue on self._input to get "x,y,r,g,b" for each pixel"""
         cmd = "pvalue -o -h -H"
         if os.name == "nt":
             path = self._createTempFileFromCmd(cmd, self._input)
@@ -104,13 +140,13 @@ class RGBEImage(FalsecolorImage):
 
     def hasArrayData(self, wxparent):
         """read pixel data into array of (r,g,b,v) values"""
-        if self._arrayTrue:
+        if self._hasArray == True:
             return True
-
-        if self._array == []:
-            ## data not read yet
-            return self.readArrayDataBIN(wxparent)
-            #return self.readArrayData(wxparent)
+        elif self._array == False:
+            return False
+        else:
+            self._hasArray = self.readArrayDataBIN(wxparent)
+            return self._hasArray
         
 
     def readArrayData(self, wxparent):
@@ -163,9 +199,10 @@ class RGBEImage(FalsecolorImage):
                 return
         dlg.Destroy()
         if len(self._array) != yres:
+            self._array = False
             return False
         else:
-            self._arrayTrue = True
+            self._hasArray = True
             return True
 
 
@@ -214,16 +251,15 @@ class RGBEImage(FalsecolorImage):
         self._array = []
         for y in range(yres):
             self._array.append(pixels[y*xres:(y+1)*xres])
-        #dlg.Update(6, "Done")
         dlg.Destroy()
         return True
 
 
     def _readArrayError(self, dlg, msg):
-        """show error message and set self._array to not empty"""
+        """show error message and set self._array to False"""
         dlg.Destroy()
         self.showError(msg)
-        self._array = [msg]
+        self._array = False
 
 
     def saveToAny(self, path):

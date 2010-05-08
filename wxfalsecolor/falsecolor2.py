@@ -126,6 +126,23 @@ class FalsecolorBase:
 	    os.mkdir(self.tmpdir)
 
 
+    def _createTempFile(self, data=None):
+        """write input data to temporary file"""
+        if data == None:
+            if self._input == '':
+                self.log("_createTempFile(): data available", 1)
+                return False
+            data = self._input
+
+        self._createTmpDir()
+        fd,path = tempfile.mkstemp(suffix=".hdr",dir=self.tmpdir)
+        self.log("temppath='%s'" % path)
+        f = open(path, "wb")
+        f.write(data)
+        f.close()
+        return path
+
+
     def _createTempFileFromCmd(self, cmd, stdin=""):
         """create tmp file as stdout for <cmd> and return file path"""
 	self._createTmpDir()

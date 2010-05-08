@@ -10,8 +10,6 @@ KNOWN ISSUES
 USABILITY
 =========
 
-* add menu bar
-
 * split falsecolor options in 'base' and 'advanced' (pop-up)
 
 
@@ -31,7 +29,4 @@ wxfalsecolor:
 
 * preferences dialog and saving
 
-* 'pcond' feature (requires preferences?)
-
 * handling of command line arguments like falsecolor2
-
