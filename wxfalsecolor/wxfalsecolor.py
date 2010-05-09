@@ -60,6 +60,64 @@ DEBUG = 0
 
 
 
+class HeaderDialog(wx.Frame):
+
+    def __init__(self, parent, header1):
+
+        wx.Frame.__init__(self, parent, wx.ID_ANY, "Image Header")
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+
+        scroll1, maxw, height = self.addTextWindow(header1)
+        sizer.Add(scroll1, proportion=1, flag=wx.EXPAND|wx.ALL, border=10) 
+
+        button = wx.Button(self, wx.ID_ANY, "Close")
+        self.Bind(wx.EVT_BUTTON, self.destroy)
+        sizer.Add(button, proportion=0, flag=wx.ALIGN_CENTER|wx.ALL, border=10) 
+        height += 100
+
+        if maxw > 900:
+            maxw = 800
+        if height > 800:
+            height = 400
+        self.SetSizer(sizer)
+        self.SetSize((maxw+40,height))
+
+
+    def addTextWindow(self, text):
+        """create new scrolled text window for header"""
+        scroll = wx.ScrolledWindow(self, wx.ID_ANY)
+        scroll.SetBackgroundColour(wx.WHITE)
+        
+        cachedLines = []
+        y = 0
+        maxw = 0
+        for line in text.split("\n"):
+            st = wx.StaticText(scroll, -1, "%s" % line, pos=wx.Point(0,y))
+            if line == "modified:":
+                st.SetForegroundColour(wx.Colour(0,0,255))
+            if line in cachedLines:
+                st.SetForegroundColour(wx.Colour(127,127,127))
+            cachedLines.append(line)
+            w,h = st.GetSizeTuple()
+            maxw = max(maxw,w)
+            dy = h + 2
+            y += dy
+        y -= dy
+        scroll.SetScrollbars(1,1,maxw,y)
+        return scroll,maxw,y
+
+
+    def destroy(self, evt):
+        self.Destroy()
+
+
+
+
+
+
+
+
 class wxFalsecolorFrame(wx.Frame):
 
     def __init__(self, args=[]):
@@ -69,7 +127,7 @@ class wxFalsecolorFrame(wx.Frame):
         self._addMenu()
         
         ## image display
-        self.picturepanel = ImagePanel(self)
+        self.imagepanel = ImagePanel(self)
 
         ## buttons
         self._doButtonLayout()
@@ -77,7 +135,7 @@ class wxFalsecolorFrame(wx.Frame):
         ## image - buttons layout
         self.sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.sizer.Add(self.panelSizer,   proportion=0, flag=wx.EXPAND)
-        self.sizer.Add(self.picturepanel, proportion=1, flag=wx.EXPAND)
+        self.sizer.Add(self.imagepanel, proportion=1, flag=wx.EXPAND)
         self.SetSizer(self.sizer)
         self.statusbar = self.CreateStatusBar()
 
@@ -168,6 +226,24 @@ class wxFalsecolorFrame(wx.Frame):
         self.panelSizer.Add( quitbutton, proportion=0, flag=wx.EXPAND|wx.ALL|wx.ALIGN_BOTTOM, border=10 )
 
 
+    def doFalsecolor(self, args):
+        """convert Radiance RGBE image to wx.Bitmap"""
+        if self.imagepanel.doFalsecolor(args) == True:
+            self.displaycontrols.reset()
+            return True
+        else:
+            return False
+
+
+    def doPcond(self, args):
+        """apply pcond args to image"""
+        if self.imagepanel.doPcond(args) == True:
+            self.fccontrols.reset()
+            return True
+        else:
+            return False
+
+
     def formatNumber(self, n):
         """use FalsecolorImage formating for consistency"""
         if self.rgbeImg:
@@ -205,14 +281,15 @@ class wxFalsecolorFrame(wx.Frame):
             msg = "Error loading image:\n%s" % self.rgbeImg.error
             self.showError(msg)
         else:
-            self.updatePicturePanel()
-            if self.img:
-                self.path = path
-                self.filename = os.path.split(path)[1]
+            self.path = path
+            self.filename = os.path.split(path)[1]
+            self.imagepanel.update(self.rgbeImg)
+            self.displaycontrols.reset()
             if self.rgbeImg.isIrridiance():
-                self.fccontrols.setFCLabel("Lux")
+                self.fccontrols.reset("Lux")
+            else:
+                self.fccontrols.reset()
             self.saveButton.Enable()
-            self.fccontrols.enableFC("convert fc")
         self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
 
 
@@ -259,25 +336,7 @@ class wxFalsecolorFrame(wx.Frame):
     def reset(self):
         """reset array to inital (empty) values"""
         self.displaycontrols.reset()
-        self.picturepanel.clearLabels()
-
-
-    def rgbe2fc(self,event):
-        """convert Radiance RGBE image to wx.Bitmap"""
-        self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-        args = self.fccontrols.getFCArgs()
-        self.rgbeImg.resetDefaults()
-        self.rgbeImg.setOptions(args)
-        self.rgbeImg.doFalsecolor()
-        if self.rgbeImg.error:
-            self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
-            msg = "Error creating falsecolor:\n%s" % self.rgbeImg.error 
-            self.showError(msg)
-            return False
-        else:
-            self.updatePicturePanel()
-            self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
-            return True
+        self.imagepanel.clearLabels()
 
 
     def _searchBinary(self,bname):
@@ -336,13 +395,12 @@ class wxFalsecolorFrame(wx.Frame):
             return
         header2 = self.rgbeImg.getDataHeader()
         if header2 and header != header2:
-            header += "\n\ncurrent:\n\n"
+            header += "\n\nmodified:\n"
             header += header2
-        
-        #XXX use StaticText to avoid line wrap and for highlight
-        dlg = wx.MessageDialog(self, message=header, caption="Image Header", style=wx.OK|wx.ICON_INFORMATION)
-        dlg.ShowModal()
-        dlg.Destroy()
+
+        ## create new dialog window        
+        dlg = HeaderDialog(self, header)
+        dlg.Show()
 
 
     def showPixelValueAt(self, pos):
@@ -357,20 +415,21 @@ class wxFalsecolorFrame(wx.Frame):
             self.statusbar.SetStatusText("'%s':   x,y=(%d,%d)   %s" % (self.filename, pos[0],pos[1], value))
 
 
-    def updatePicturePanel(self):
-        """recreate BMP image"""
+    def updatePicturePanelOLD(self):
+        """recreate bitmap image"""
+        return
         try:
             ppm = self.rgbeImg.toPPM()
             io = cStringIO.StringIO(ppm)
             self.img = wx.ImageFromStream(io)
-            self.picturepanel.setImage(self.img)
-            self.picturepanel.rgbeImg = self.rgbeImg
+            self.imagepanel.setImage(self.img)
+            self.imagepanel.rgbeImg = self.rgbeImg
         except:
             if self.rgbeImg.error:
                 msg = "Error creating falsecolor image:\n%s" % self.rgbeImg.error
                 self.showError(msg)
             return
-        self.picturepanel.Refresh()
+        self.imagepanel.Refresh()
    
 
 

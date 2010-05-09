@@ -31,20 +31,24 @@ class RGBEImage(FalsecolorImage):
         self._array = []
         self._hasArray = False
         self.legendoffset = (0,0)
-        self.legendpos = "leftbottom"
+        self.legendpos = "SW"
         FalsecolorImage.__init__(self, *args)
 
 
     def doFalsecolor(self, *args, **kwargs):
         """set legendoffset after falsecolor conversion"""
         FalsecolorImage.doFalsecolor(self, *args, **kwargs)
-        if not self.error:
-            self.legendoffset = (0,0)
-            if self.legend.position.startswith("W"):
-                self.legendoffset = (self.legend.width,0)
-            elif self.legend.position.startswith("N"):
-                self.legendoffset = (0,self.legend.height)
-    
+        if self.error:
+            msg = "falsecolor2 error:\n%s" % self.error
+            self.showError(msg)
+            return False
+        self.legendoffset = (0,0)
+        if self.legend.position.startswith("W"):
+            self.legendoffset = (self.legend.width,0)
+        elif self.legend.position.startswith("N"):
+            self.legendoffset = (0,self.legend.height)
+        return True
+
 
     def doPcond(self, args):
         """condition image with pcond"""
@@ -57,6 +61,7 @@ class RGBEImage(FalsecolorImage):
             data = self._popenPipeCmd(cmd, None)
             if data:
                 self.data = data
+                self.legendoffset = (0,0)
                 return True
         except Exception, err:
             msg = "pcond error:\n%s" % self.error
@@ -77,23 +82,6 @@ class RGBEImage(FalsecolorImage):
             return header
         except:
             return False
-
-
-    def getPValueLines(self):
-        """UNUSED - run pvalue on self._input to get "x,y,r,g,b" for each pixel"""
-        cmd = "pvalue -o -h -H"
-        if os.name == "nt":
-            path = self._createTempFileFromCmd(cmd, self._input)
-            f = open(path, 'r')
-            text = f.read()
-            f.close()
-        else:
-	    text = self._popenPipeCmd(cmd, self._input)
-
-	if self.error:
-            return False
-        else:
-            return text
 
 
     def getRGBVAt(self, pos):

@@ -5,6 +5,7 @@
 ## $URL$
 
 import os
+import cStringIO
 import traceback
 import wx
 
@@ -67,17 +68,19 @@ class ImagePanel(wx.Panel):
         self._dragging = False
         
         w,h = self._scaledImg.GetSize()
-        if x <= w and y <= h:
-            if self._scale > 1:
-                x = int(x*self._scale)
-                y = int(y*self._scale)
-            if dx == 0:
-                r,g,b,v = self.parent.getRGBVAt((x,y))
-            else:
-                r,g,b,v = self.parent.getRGBVAverage((x,y),(x+dx,y+dy))
-            #print "TEST: fake values for rgbv"
-            #r,g,b,v = (0.1,0.2,0.3,(0.0265+0.134+0.0195)*179)
- 
+        if x > w or y > h:
+            ## outside image area
+            return
+        
+        if self._scale > 1:
+            x = int(x*self._scale)
+            y = int(y*self._scale)
+        if dx == 0:
+            r,g,b,v = self.parent.getRGBVAt((x,y))
+        else:
+            r,g,b,v = self.parent.getRGBVAverage((x,y),(x+dx,y+dy))
+        #print "TEST: fake values for rgbv"
+        #r,g,b,v = (0.1,0.2,0.3,(0.0265+0.134+0.0195)*179)
         if r > 0:
             if v > 0:
                 label = "%s lux" % self.parent.formatNumber(v)
@@ -87,14 +90,53 @@ class ImagePanel(wx.Panel):
             if dx == 0:
                 dx = 2
                 dy = 2
-            self._labels.append((x,y, label, dx,dy))
-            self.UpdateDrawing()
+            self._labels.append((x,y, dx,dy, label))
 
 
+    def adjustLabels(self, dx, dy):
+        """move labels if legend offset has changed"""
+        if self._labels == []:
+            return
+        for i in range(len(self._labels)):
+            x,y,sx,sy,text = self._labels[i]
+            self._labels[i] = (x+dx,y+dy,sx,sy,text)
+ 
+    
     def clearLabels(self):
         """reset lables list"""
         self._labels = []
         self.UpdateDrawing()
+
+    
+    def doFalsecolor(self, args):
+        """convert rgbeimage to falsecolor and reload image"""
+        xo,yo = self.rgbeImg.legendoffset
+        self.rgbeImg.resetDefaults()
+        self.rgbeImg.setOptions(args)
+        
+        #self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+        if self.rgbeImg.doFalsecolor() == False:
+            #self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
+            return False
+        else:
+            #self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
+            xn,yn = self.rgbeImg.legendoffset
+            self.adjustLabels(xn-xo, yn-yo)
+            self.update()
+            return True
+
+    
+    def doPcond(self, args):
+        """apply pcond args to rgbeimage and reload image"""
+        xo,yo = self.rgbeImg.legendoffset
+        self.rgbeImg.resetDefaults()
+        if self.rgbeImg.doPcond(args) == False:
+            return False
+        else:
+            xn,yn = self.rgbeImg.legendoffset
+            self.adjustLabels(xn-xo, yn-yo)
+            self.update()
+            return True
 
 
     def DoNothing(self, evt):
@@ -163,7 +205,7 @@ class ImagePanel(wx.Panel):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         font.SetWeight(wx.BOLD)
         gc.SetFont(font)
-        for x,y,l,dx,dy in self._labels:
+        for x,y,dx,dy,l in self._labels:
             if self._scale > 1:
                 x /= self._scale
                 y /= self._scale
@@ -348,6 +390,20 @@ class ImagePanel(wx.Panel):
         ## call parent.Layout() to force resize of panel
         self.parent.Layout()
 
+
+    def update(self, rgbeImg=None):
+        """set new rgbeImg"""
+        if rgbeImg:
+            self.rgbeImg = rgbeImg
+        try:
+            ppm = self.rgbeImg.toPPM()
+            io = cStringIO.StringIO(ppm)
+            img = wx.ImageFromStream(io)
+        except:
+            return False
+        self.setImage(img)
+        return True
+        
 
     def UpdateDrawing(self):
         """updates drawing when needed (not by system)"""

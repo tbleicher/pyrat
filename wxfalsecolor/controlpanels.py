@@ -10,18 +10,48 @@ import wx.lib.buttons as buttons
 
 
 
-class FalsecolorControlPanel(wx.Panel):
+class BaseControlPanel(wx.Panel):
 
     def __init__(self, parent, wxapp, *args, **kwargs):
+        """save wxapp and call self.layout() to create buttons"""
         wx.Panel.__init__(self, parent, *args, **kwargs)
         self.wxapp = wxapp
-        
+        self._cmdLine = None
+        self.layout()
+    
+    def createCenteredGrid(self, layout):
+        """arrange controls in centered grid sizer"""
+        ## create grid sizer
+        grid = wx.GridBagSizer(2,2)
+        for r,row in enumerate(layout):
+            c1,c2 = row
+            if c2:
+                grid.Add( c1, (r,0),        flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+                grid.Add( c2, (r,1),        flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+            else:
+                grid.Add( c1, (r,0), (1,2), flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+       
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(wx.Panel(self), proportion=1, flag=wx.EXPAND,border=0)
+        sizer.Add(grid)
+        sizer.Add(wx.Panel(self), proportion=1, flag=wx.EXPAND,border=0)
+        self.SetSizer(sizer)
+        self.SetInitialSize()
+
+    def layout(self):
+        """create buttons here"""
+        pass        
+
+
+
+
+class FalsecolorControlPanel(BaseControlPanel):
+
+    def __init__(self, parent, wxapp, *args, **kwargs):
         self.positions = ['WS','W','WN','NW','N','NE','EN','E','ES','SE','S','SW']
-        self._buildFCButtons()
-        self._cmdLine = ""
+        BaseControlPanel.__init__(self, parent, wxapp, *args, **kwargs)
 
-
-    def _buildFCButtons(self):
+    def layout(self):
         """create control elements in grid layout"""
         ## type choice button
         self.fc_type = wx.Choice(self, wx.ID_ANY, choices=["color fill", "c-lines", "c-bands"])
@@ -34,7 +64,7 @@ class FalsecolorControlPanel(wx.Panel):
         self.inside = wx.CheckBox(self, wx.ID_ANY, 'in')
         self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.inside)
         
-        self.label = wx.TextCtrl(self, wx.ID_ANY, "NITS",  size=(50,-1))
+        self.label = wx.TextCtrl(self, wx.ID_ANY, "cd/m2", size=(50,-1))
         self.scale = wx.TextCtrl(self, wx.ID_ANY, "1000",  size=(50,-1))
         self.steps = wx.TextCtrl(self, wx.ID_ANY, "8",     size=(50,-1))
         self.logv  = wx.TextCtrl(self, wx.ID_ANY, "2",     size=(50,-1))
@@ -54,6 +84,20 @@ class FalsecolorControlPanel(wx.Panel):
         self.doFCButton.Bind(wx.EVT_LEFT_DOWN, self.doFalsecolor)
         self.doFCButton.Disable()
 
+        ## bind events
+        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.label)
+        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.scale)
+        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.steps)
+        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.logv)
+        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.maskv)
+        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.legW)
+        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.legH)
+        self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_log)
+        self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_mask)
+        self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_col)
+        self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_extr)
+        self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_zero)
+        
         layout = [(self.fc_type,                             None),
                   (self.inside,                              self.legpos),
                   (wx.Panel(self,wx.ID_ANY,size=(-1,10)),    None),
@@ -73,37 +117,14 @@ class FalsecolorControlPanel(wx.Panel):
                   (self.doFCButton,                          None),
                   (wx.Panel(self,wx.ID_ANY,size=(-1,5)),     None)]
         
-        ## create grid sizer
-        grid = wx.GridBagSizer(2,2)
-        for r,row in enumerate(layout):
-            c1,c2 = row
-            if c2:
-                grid.Add( c1, (r,0),        flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
-                grid.Add( c2, (r,1),        flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
-            else:
-                grid.Add( c1, (r,0), (1,2), flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
-       
-        ## bind events
-        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.label)
-        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.scale)
-        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.steps)
-        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.logv)
-        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.maskv)
-        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.legW)
-        self.Bind(wx.EVT_TEXT, self.updateFCButton, self.legH)
-        self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_log)
-        self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_mask)
-        self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_col)
-        self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_extr)
-        self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_zero)
-        
-        self.SetSizer(grid)
-        self.SetInitialSize()
+        ## arange in grid 
+        self.createCenteredGrid(layout)
 
 
     def doFalsecolor(self, event):
         """start conversion to falsecolor and update button"""
-        if self.wxapp.rgbe2fc(event) == True:
+        args = self.getFCArgs()
+        if self.wxapp.doFalsecolor(args) == True:
             self._cmdLine = " ".join(self.getFCArgs())
             self.doFCButton.SetLabel("update fc")
             self.doFCButton.Disable()
@@ -155,22 +176,42 @@ class FalsecolorControlPanel(wx.Panel):
         return args        
 
 
-    def setFCLabel(self, text):
-        self.label.SetValue(text)
+    def reset(self, label="cd/m2"):
+        """reset controls to initial values"""
+        self.enableFC("convert fc")
+        self.label.SetValue(label)
+        
+        self.fc_type.SetSelection(0)
+        self.fc_log.SetValue(False)
+        self.fc_mask.SetValue(False)
+        self.fc_col.SetValue(False)
+        self.fc_extr.SetValue(False)
+        self.fc_zero.SetValue(False)
+        
+        self.scale.SetValue("1000")
+        self.steps.SetValue("8")
+        
+        self.legpos.SetStringSelection("WS")
+        self.inside.SetValue(False)
+        self.legW.SetValue("100")
+        self.legH.SetValue("200")
 
-    
+        self._cmdLine = None
+        
+
     def updateFCButton(self, event):
         """set label of falsecolor button to 'update'"""
-        if self._cmdLine != "":
-            newCmd = " ".join(self.getFCArgs())
-            if self._cmdLine != newCmd:
-                self.doFCButton.SetLabel("update fc")
-                self.doFCButton.Enable()
-                self.doFCButton.SetBackgroundColour(wx.Colour(255,140,0))
-            else:
-                self.doFCButton.Disable()
-                self.doFCButton.SetBackgroundColour(wx.WHITE)
-            self.doFCButton.Refresh()
+        if self._cmdLine == None:
+            return 
+        newCmd = " ".join(self.getFCArgs())
+        if self._cmdLine != newCmd:
+            self.doFCButton.SetLabel("update fc")
+            self.doFCButton.Enable()
+            self.doFCButton.SetBackgroundColour(wx.Colour(255,140,0))
+        else:
+            self.doFCButton.Disable()
+            self.doFCButton.SetBackgroundColour(wx.WHITE)
+        self.doFCButton.Refresh()
 
 
     def updatePosition(self, event):
@@ -201,6 +242,9 @@ class MiscControlPanel(wx.Panel):
         showHeader.Bind(wx.EVT_BUTTON, self.OnShowHeader)
         sizer.Add(showHeader, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
         
+        spacer = wx.Panel(self, wx.ID_ANY, size=(-1,10))
+        sizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
+        
         about = wx.Button(self, wx.ID_ANY, "about")
         about.Bind(wx.EVT_BUTTON, self.OnAbout)
         sizer.Add(about, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
@@ -211,7 +255,6 @@ class MiscControlPanel(wx.Panel):
         self.SetSizer(sizer)
         self.SetInitialSize()
 
-
     def OnAbout(self, event):
         self.wxapp.showAboutDialog()
 
@@ -221,35 +264,29 @@ class MiscControlPanel(wx.Panel):
 
 
 
-class ViewControlPanel(wx.Panel):
+class ViewControlPanel(BaseControlPanel):
     
-    def __init__(self, parent, wxapp, *args, **kwargs):
-        wx.Panel.__init__(self, parent, *args, **kwargs)
-        self.wxapp = wxapp
-        self._layout()
-    
-    
-    def _layout(self):
+    def layout(self):
         """creates layout of ximage buttons"""
         self.showValues = wx.Button(self, wx.ID_ANY, "show values")
         self.showValues.Bind(wx.EVT_BUTTON, self.OnShowValues)
 
-        self.acuity = wx.CheckBox(self, wx.ID_ANY, 'acuity loss')
-        self.glare = wx.CheckBox(self, wx.ID_ANY, 'veiling glare')
+        self.acuity   = wx.CheckBox(self, wx.ID_ANY, 'acuity loss')
+        self.glare    = wx.CheckBox(self, wx.ID_ANY, 'veiling glare')
         self.contrast = wx.CheckBox(self, wx.ID_ANY, 'contrast')
-        self.colour = wx.CheckBox(self, wx.ID_ANY, 'color loss')
+        self.colour   = wx.CheckBox(self, wx.ID_ANY, 'color loss')
         
         self.exposure = wx.CheckBox(self, wx.ID_ANY, 'exp')
         self.expvalue = wx.TextCtrl(self, wx.ID_ANY, "1", size=(50,-1))
-        self.linear = wx.CheckBox(self, wx.ID_ANY, 'linear response')
-        self.centre = wx.CheckBox(self, wx.ID_ANY, 'centre-w. avg')
+        self.linear   = wx.CheckBox(self, wx.ID_ANY, 'linear response')
+        self.centre   = wx.CheckBox(self, wx.ID_ANY, 'centre-w. avg')
         
         self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.acuity)
         self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.glare)
         self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.contrast)
         self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.colour)
         self.Bind(wx.EVT_CHECKBOX, self.OnExposure,        self.exposure)
-        self.Bind(wx.EVT_TEXT,     self.updatePcondButton, self.expvalue)
+        self.Bind(wx.EVT_TEXT,     self.OnExpValue,        self.expvalue)
         self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.linear)
         self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.centre)
 
@@ -276,18 +313,64 @@ class ViewControlPanel(wx.Panel):
                   (saveBitmap,       None),
                   (wx.Panel(self,wx.ID_ANY,size=(-1, 5)), None)]
                 
-        ## create grid sizer
-        grid = wx.GridBagSizer(2,2)
-        for r,row in enumerate(layout):
-            c1,c2 = row
-            if c2:
-                grid.Add( c1, (r,0),        flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
-                grid.Add( c2, (r,1),        flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
-            else:
-                grid.Add( c1, (r,0), (1,2), flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
-                
-        self.SetSizer(grid)
-        self.SetInitialSize()
+        ## arange in grid 
+        self.createCenteredGrid(layout)
+
+
+    def disablePcondButton(self):
+        """disable pcond button and change colour"""
+        self.pcondButton.Disable()
+        self.pcondButton.SetBackgroundColour(wx.WHITE)
+
+
+    def getPcondArgs(self):
+        """collect pcond arguments and return as list"""
+        args = []
+        if self.acuity.GetValue():   args.append("-a");
+        if self.glare.GetValue():    args.append("-v");
+        if self.contrast.GetValue(): args.append("-s");
+        if self.colour.GetValue():   args.append("-c"); 
+        if self.linear.GetValue():   args.append("-l");
+        if self.centre.GetValue():   args.append("-w");
+        if self.exposure.GetValue():
+            args.append("-e")
+            args.append(self.expvalue.GetValue())
+        return args
+
+
+    def OnDoPcond(self, event):
+        """run pcond and update imagepanel"""
+        if self.wxapp.rgbeImg:
+            args = self.getPcondArgs()
+            if self.wxapp.doPcond(args) == True:
+                self._cmdLine = " ".join(args)
+        self.disablePcondButton()
+
+
+    def OnExposure(self, event):
+        """select 'linear' cb if exposure is enabled"""
+        if self.exposure.GetValue() == True:
+            self.linear.SetValue(True)
+            try:
+                v = float(self.expvalue.GetValue())
+            except ValueError:
+                self.expvalue.SetValue("+0")
+        self.updatePcondButton(event)
+
+
+    def OnSaveBitmap(self, event):
+        """call imagepanel's saveBitmap() function"""
+        self.wxapp.imagepanel.saveBitmap()
+
+
+    def OnShowValues(self, event):
+        """load data from image and clear labels"""
+        self.wxapp.imagepanel.clearLabels()
+        if self.wxapp.loadValues() == False:
+            self.showValues.SetLabel("no data")
+            self.showValues.Disable()
+        else:
+            self.showValues.SetLabel("clear labels")
 
 
     def reset(self):
@@ -308,56 +391,27 @@ class ViewControlPanel(wx.Panel):
         self.pcondButton.SetBackgroundColour(wx.WHITE)
         
 
-    def getPcondArgs(self):
-        """collect pcond arguments and return as list"""
-        args = []
-        if self.acuity.GetValue():   args.append("-a");
-        if self.glare.GetValue():    args.append("-v");
-        if self.contrast.GetValue(): args.append("-s");
-        if self.colour.GetValue():   args.append("-c"); 
-        if self.linear.GetValue():   args.append("-l");
-        if self.centre.GetValue():   args.append("-w");
-        if self.exposure.GetValue():
-            args.append("-e")
-            args.append(self.expvalue.GetValue())
-        return args
-
-
-    def OnDoPcond(self, event):
-        """run pcond and update picturepanel"""
-        if self.wxapp.rgbeImg:
-            args = self.getPcondArgs()
-            if self.wxapp.rgbeImg.doPcond(args) == True:
-                self.wxapp.updatePicturePanel() 
-        self.pcondButton.Disable()
-        self.pcondButton.SetBackgroundColour(wx.WHITE)
-
-
-    def OnExposure(self, event):
-        """select 'linear' cb if exposure is enabled"""
-        if self.exposure.GetValue() == True:
+    def OnExpValue(self, event):
+        """enable exposure cb on expvalue change"""
+        try:
+            v = float(self.expvalue.GetValue())
+            self.exposure.SetValue(True)
             self.linear.SetValue(True)
-        self.updatePcondButton(event)
-
-
-    def OnSaveBitmap(self, event):
-        self.wxapp.picturepanel.saveBitmap()
-
-
-    def OnShowValues(self, event):
-        """load data from image and clear labels"""
-        self.wxapp.picturepanel.clearLabels()
-        if self.wxapp.loadValues() == False:
-            self.showValues.SetLabel("no data")
-            self.showValues.Disable()
-        else:
-            self.showValues.SetLabel("clear labels")
+            self.updatePcondButton(event)
+        except ValueError:
+            self.exposure.SetValue(False)
 
 
     def updatePcondButton(self, event):
-        self.pcondButton.Enable()
-        self.pcondButton.SetBackgroundColour(wx.Colour(255,140,0))
-
+        """enable pcond button if new options are selected"""
+        if not self.wxapp.rgbeImg:
+            self.disablePcondButton()
+            return
+        if " ".join(self.getPcondArgs()) != self._cmdLine:
+            self.pcondButton.Enable()
+            self.pcondButton.SetBackgroundColour(wx.Colour(255,140,0))
+        else:
+            self.disablePcondButton()
 
 
 
@@ -412,25 +466,6 @@ class FoldableControlsPanel(wx.Panel):
 
         size = self.GetClientSize()
         self.pnl.SetDimensions(0, 0, size.GetWidth(), size.GetHeight())
-
-
-    def _buildPcondButtons(self, panel):
-        pcpanel = wx.Panel(panel,wx.ID_ANY,size=(-1,35))
-        pcsizer = wx.BoxSizer(wx.VERTICAL)
-        
-        button1 = wx.Button(pcpanel, wx.ID_ANY, "pcond TODO")
-        button1.Bind(wx.EVT_BUTTON, self.OnCollapseMe)
-        pcsizer.Add(button1, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
-        button2 = wx.Button(pcpanel, wx.ID_ANY, "pcond TODO")
-        button2.Bind(wx.EVT_BUTTON, self.OnCollapseMe)
-        pcsizer.Add(button2, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
-        
-        ## add spacer and set size
-        spacer = wx.Panel(pcpanel, wx.ID_ANY, size=(-1,5))
-        pcsizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
-        pcpanel.SetSizer(pcsizer)
-        pcpanel.SetInitialSize()
-        return pcpanel
 
 
     def setBarSize(self, event):
