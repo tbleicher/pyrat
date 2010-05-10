@@ -9,7 +9,7 @@ import os
 import traceback
 import wx
 
-
+VERSION="0.3"
 LICENSE="""Copyright 2010 Thomas Bleicher. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -74,7 +74,7 @@ class HeaderDialog(wx.Frame):
         button = wx.Button(self, wx.ID_ANY, "Close")
         self.Bind(wx.EVT_BUTTON, self.destroy)
         sizer.Add(button, proportion=0, flag=wx.ALIGN_CENTER|wx.ALL, border=10) 
-        height += 100
+        height += 120 ## allow space for borders on Windows
 
         if maxw > 900:
             maxw = 800
@@ -367,7 +367,7 @@ class wxFalsecolorFrame(wx.Frame):
         """show dialog with license etc"""
         info = wx.AboutDialogInfo()
         info.Name = "wxfalsecolor"
-        info.Version = "v0.2 (rREV)"     # placeholder for build script 
+        info.Version = "v%s (rREV)" % VERSION  # placeholder for build script 
         info.Copyright = "(c) 2010 Thomas Bleicher"
         info.Description = "cross-platform GUI frontend for falsecolor"
         info.WebSite = ("http://sites.google.com/site/tbleicher/radiance/wxfalsecolor", "wxfalsecolor home page")

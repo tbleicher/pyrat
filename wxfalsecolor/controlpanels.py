@@ -277,7 +277,7 @@ class ViewControlPanel(BaseControlPanel):
         self.colour   = wx.CheckBox(self, wx.ID_ANY, 'color loss')
         
         self.exposure = wx.CheckBox(self, wx.ID_ANY, 'exp')
-        self.expvalue = wx.TextCtrl(self, wx.ID_ANY, "1", size=(50,-1))
+        self.expvalue = wx.TextCtrl(self, wx.ID_ANY, "+0", size=(50,-1))
         self.linear   = wx.CheckBox(self, wx.ID_ANY, 'linear response')
         self.centre   = wx.CheckBox(self, wx.ID_ANY, 'centre-w. avg')
         
@@ -358,6 +358,17 @@ class ViewControlPanel(BaseControlPanel):
         self.updatePcondButton(event)
 
 
+    def OnExpValue(self, event):
+        """enable exposure cb on expvalue change"""
+        try:
+            v = float(self.expvalue.GetValue())
+            self.exposure.SetValue(True)
+            self.linear.SetValue(True)
+            self.updatePcondButton(event)
+        except ValueError:
+            self.exposure.SetValue(False)
+
+
     def OnSaveBitmap(self, event):
         """call imagepanel's saveBitmap() function"""
         self.wxapp.imagepanel.saveBitmap()
@@ -382,25 +393,14 @@ class ViewControlPanel(BaseControlPanel):
         self.glare.SetValue(False)
         self.contrast.SetValue(False)
         self.colour.SetValue(False) 
+        self.expvalue.SetValue("+0")
         self.exposure.SetValue(False)
-        self.expvalue.SetValue("1")
         self.linear.SetValue(False)
         self.centre.SetValue(False)
         
         self.pcondButton.Enable()
         self.pcondButton.SetBackgroundColour(wx.WHITE)
         
-
-    def OnExpValue(self, event):
-        """enable exposure cb on expvalue change"""
-        try:
-            v = float(self.expvalue.GetValue())
-            self.exposure.SetValue(True)
-            self.linear.SetValue(True)
-            self.updatePcondButton(event)
-        except ValueError:
-            self.exposure.SetValue(False)
-
 
     def updatePcondButton(self, event):
         """enable pcond button if new options are selected"""

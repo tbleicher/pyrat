@@ -9,6 +9,8 @@ import math
 import traceback
 from subprocess import Popen, PIPE
 
+VERSION="0.3"
+
 TEMPLATE_PC0 = """
 PI : 3.14159265358979323846 ;
 scale : %u ;
@@ -930,7 +932,7 @@ class FalsecolorImage(FalsecolorBase):
 
         indent = "    " 
         sys.stdout.write("\nABOUT:\n")
-        sys.stdout.write("\n%s%s (v0.2,REV)\n" % (indent,sys.argv[0]))
+        sys.stdout.write("\n%s%s (v%s,REV)\n" % (indent,sys.argv[0],VERSION))
         sys.stdout.write("\nUSAGE:\n\n")
         for o in options:
             sys.stdout.write("%s%s %s\n" % (indent, o[0],o[1])) 
