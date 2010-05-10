@@ -281,6 +281,14 @@ class ViewControlPanel(BaseControlPanel):
         self.linear   = wx.CheckBox(self, wx.ID_ANY, 'linear response')
         self.centre   = wx.CheckBox(self, wx.ID_ANY, 'centre-w. avg')
         
+        self.dsprange = wx.CheckBox(self, wx.ID_ANY, 'display range')
+        self.dsp_min  = wx.TextCtrl(self, wx.ID_ANY, "0.5", size=(40,-1))
+        self.dsp_max  = wx.TextCtrl(self, wx.ID_ANY, "200", size=(40,-1))
+        dsp_box = wx.BoxSizer(wx.HORIZONTAL)
+        dsp_box.Add(self.dsp_min, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
+        dsp_box.Add(wx.StaticText(self, wx.ID_ANY, "to", style=wx.ALIGN_CENTER), proportion=1, flag=wx.EXPAND|wx.Left|wx.RIGHT, border=0)
+        dsp_box.Add(self.dsp_max, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
+        
         self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.acuity)
         self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.glare)
         self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.contrast)
@@ -289,6 +297,9 @@ class ViewControlPanel(BaseControlPanel):
         self.Bind(wx.EVT_TEXT,     self.OnExpValue,        self.expvalue)
         self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.linear)
         self.Bind(wx.EVT_CHECKBOX, self.updatePcondButton, self.centre)
+        self.Bind(wx.EVT_CHECKBOX, self.OnDspRange,        self.dsprange)
+        self.Bind(wx.EVT_TEXT,     self.OnDspValue,        self.dsp_min)
+        self.Bind(wx.EVT_TEXT,     self.OnDspValue,        self.dsp_max)
 
         self.pcondButton = buttons.GenButton(self, wx.ID_ANY, label='apply pcond', size=(-1,24))
         self.pcondButton.Bind(wx.EVT_BUTTON, self.OnDoPcond)
@@ -307,6 +318,9 @@ class ViewControlPanel(BaseControlPanel):
                   (self.exposure, self.expvalue),
                   (self.linear,      None),
                   (self.centre,      None),
+                  (wx.Panel(self,wx.ID_ANY,size=(-1, 5)), None),
+                  (self.dsprange,    None),
+                  (dsp_box,          None),
                   (wx.Panel(self,wx.ID_ANY,size=(-1, 5)), None),
                   (self.pcondButton, None), 
                   (wx.Panel(self,wx.ID_ANY,size=(-1,10)), None),
@@ -335,6 +349,18 @@ class ViewControlPanel(BaseControlPanel):
         if self.exposure.GetValue():
             args.append("-e")
             args.append(self.expvalue.GetValue())
+        if self.dsprange.GetValue():
+            try:
+                black = float(self.dsp_min.GetValue())
+                white = float(self.dsp_max.GetValue())
+                if black <= 0:
+                    black == 0.5
+                if white <= 0:
+                    white = 100
+                range = white/black
+                args.extend(["-u", "%d" % white, "-d", "%d" % range])
+            except ValueError:
+                pass
         return args
 
 
@@ -345,6 +371,40 @@ class ViewControlPanel(BaseControlPanel):
             if self.wxapp.doPcond(args) == True:
                 self._cmdLine = " ".join(args)
         self.disablePcondButton()
+
+
+    def OnDspRange(self, event):
+        """check than min and max display settings are numbers"""
+        if self.dsprange.GetValue() == False:
+            self.updatePcondButton(event)
+            return
+        try:
+            black = float(self.dsp_min.GetValue())
+            if black <= 0:
+                self.dsp_min.SetValue("0.5")
+        except ValueError:
+            self.dsp_min.SetValue("0.5")
+        try:
+            white = float(self.dsp_max.GetValue())
+            if white <= 0:
+                self.dsp_max.SetValue("200")
+        except ValueError:
+            self.dsp_max.SetValue("200")
+        self.updatePcondButton(event)
+        
+
+    def OnDspValue(self, event):
+        """set display range to True on dsp value change"""
+        if self.dsp_min.GetValue() == "" or self.dsp_max.GetValue() == "":
+            return
+        else:
+            try:
+                black = float(self.dsp_min.GetValue())
+                white = float(self.dsp_max.GetValue())
+                self.dsprange.SetValue(True) 
+                self.updatePcondButton(event)
+            except ValueError:
+                pass
 
 
     def OnExposure(self, event):
