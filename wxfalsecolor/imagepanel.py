@@ -51,7 +51,7 @@ class ImagePanel(wx.Panel):
         self.SetDropTarget(FileDropTarget(parent))
         
         self.parent = parent
-        self.bmp = None
+        self.rgbeImg = None
         self.img = None
         self._scale = 0
         self._scaledImg = None
@@ -66,12 +66,15 @@ class ImagePanel(wx.Panel):
     def addLabel(self, x, y, dx=0, dy=0):
         """get value for (x,y) and add to self._labels"""
         self._dragging = False
-        
+        if self.rgbeImg == False:
+            return
+
         w,h = self._scaledImg.GetSize()
         if x > w or y > h:
             ## outside image area
             return
         
+        ## get rgbe value for image location
         if self._scale > 1:
             x = int(x*self._scale)
             y = int(y*self._scale)
@@ -79,18 +82,21 @@ class ImagePanel(wx.Panel):
             r,g,b,v = self.parent.getRGBVAt((x,y))
         else:
             r,g,b,v = self.parent.getRGBVAverage((x,y),(x+dx,y+dy))
-        #print "TEST: fake values for rgbv"
-        #r,g,b,v = (0.1,0.2,0.3,(0.0265+0.134+0.0195)*179)
-        if r > 0:
-            if v > 0:
-                label = "%s lux" % self.parent.formatNumber(v)
-            else:
-                lum = (r*0.265+g*0.67+b*0.065)*179
-                label = "%s cd/m2" % self.parent.formatNumber(lum)
-            if dx == 0:
-                dx = 2
-                dy = 2
-            self._labels.append((x,y, dx,dy, label))
+        if r <= 0:
+            return
+
+        ## format label text
+        if self.rgbeImg.isIrridiance():
+            label = "%s lux" % self.parent.formatNumber(v)
+        else:
+            lum = (r*0.265+g*0.67+b*0.065)*179
+            label = "%s cd/m2" % self.parent.formatNumber(lum)
+        
+        ## use minimal box to highlight spot location
+        if dx == 0:
+            dx = 2
+            dy = 2
+        self._labels.append((x,y, dx,dy, label))
 
 
     def adjustLabels(self, dx, dy):
@@ -214,12 +220,22 @@ class ImagePanel(wx.Panel):
             path_spot.AddRectangle(-1,-1,dx,dy)
             path_label = gc.CreatePath()
             path_label.AddRectangle(0,-1,w+3,h+1)
+            ## move to spot location
             gc.PushState()
             gc.Translate(x,y)
+            ## new state for label 
+            gc.PushState()
             gc.SetPen(wx.Pen(wx.BLACK, 1))
             gc.SetBrush(wx.Brush(wx.WHITE))
+            imgw,imgh = self.GetClientSize()
+            if x+w+3 > imgw:
+                gc.Translate(-(w+3), 0)
+            if y+h > imgh:
+                gc.Translate(0,-(h-1))
             gc.DrawPath(path_label)
             gc.DrawText(l,2,0)
+            gc.PopState()
+            ## back to spot state
             gc.SetPen(wx.Pen(wx.RED, 1))
             gc.SetBrush(wx.Brush(wx.RED, wx.TRANSPARENT))
             gc.DrawPath(path_spot)
