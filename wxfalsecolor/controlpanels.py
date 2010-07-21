@@ -117,7 +117,7 @@ class FalsecolorControlPanel(BaseControlPanel):
                   (self.doFCButton,                          None),
                   (wx.Panel(self,wx.ID_ANY,size=(-1,5)),     None)]
         
-        ## arange in grid 
+        ## arrange in grid 
         self.createCenteredGrid(layout)
 
 
@@ -159,7 +159,7 @@ class FalsecolorControlPanel(BaseControlPanel):
         args.extend(["-lw", self.legW.GetValue()])
         args.extend(["-lh", self.legH.GetValue()])
 
-        args.extend(["-l", self.label.GetValue()])
+        args.extend(["-l", self.getFCLableText()])
         args.extend(["-s", self.scale.GetValue()])
         args.extend(["-n", self.steps.GetValue()])
         
@@ -174,6 +174,11 @@ class FalsecolorControlPanel(BaseControlPanel):
         if self.fc_zero.GetValue():
             args.append("-z")
         return args        
+
+
+    def getFCLableText(self):
+        """return value of label text box"""
+        return self.label.GetValue()
 
 
     def reset(self, label="cd/m2"):
@@ -264,12 +269,10 @@ class MiscControlPanel(wx.Panel):
 
 
 
-class ViewControlPanel(BaseControlPanel):
+class DisplayControlPanel(BaseControlPanel):
     
     def layout(self):
         """creates layout of ximage buttons"""
-        self.showValues = wx.Button(self, wx.ID_ANY, "show values")
-        self.showValues.Bind(wx.EVT_BUTTON, self.OnShowValues)
 
         self.acuity   = wx.CheckBox(self, wx.ID_ANY, 'acuity loss')
         self.glare    = wx.CheckBox(self, wx.ID_ANY, 'veiling glare')
@@ -308,9 +311,7 @@ class ViewControlPanel(BaseControlPanel):
         saveBitmap = wx.Button(self, wx.ID_ANY, "save bitmap")
         saveBitmap.Bind(wx.EVT_BUTTON, self.OnSaveBitmap)
 
-        layout = [(self.showValues,  None),
-                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)), None),
-                  (self.acuity,      None),
+        layout = [(self.acuity,      None),
                   (self.glare,       None),
                   (self.contrast,    None),
                   (self.colour,      None),
@@ -327,7 +328,7 @@ class ViewControlPanel(BaseControlPanel):
                   (saveBitmap,       None),
                   (wx.Panel(self,wx.ID_ANY,size=(-1, 5)), None)]
                 
-        ## arange in grid 
+        ## arrange in grid 
         self.createCenteredGrid(layout)
 
 
@@ -434,23 +435,8 @@ class ViewControlPanel(BaseControlPanel):
         self.wxapp.imagepanel.saveBitmap()
 
 
-    def OnShowValues(self, event):
-        """load data from image and clear labels"""
-        self.wxapp.imagepanel.clearLabels()
-        self.wxapp.statusbar.SetStatusText("loading image data ...")
-        if self.wxapp.loadValues() == False:
-            self.showValues.SetLabel("no data")
-            self.showValues.Disable()
-            self.wxapp.statusbar.SetStatusText("Error loading image data!")
-        else:
-            self.showValues.SetLabel("clear labels")
-            self.wxapp.statusbar.SetStatusText("")
-
-
     def reset(self):
         """set buttons to initial state"""
-        self.showValues.Enable()
-        self.showValues.SetLabel("load data")
         
         self.acuity.SetValue(False)
         self.glare.SetValue(False)
@@ -479,6 +465,61 @@ class ViewControlPanel(BaseControlPanel):
 
 
 
+
+class LablesControlPanel(BaseControlPanel):
+
+    def getLableText(self):
+        return self.lableText.GetValue()
+
+    def layout(self):
+        """creates layout of ximage buttons"""
+        self.loadClearButton = wx.Button(self, wx.ID_ANY, "no data")
+        self.loadClearButton.Bind(wx.EVT_BUTTON, self.OnShowValues)
+        self.lableText = wx.TextCtrl(self, wx.ID_ANY, "")
+        
+        saveBitmap = wx.Button(self, wx.ID_ANY, "save bitmap")
+        saveBitmap.Bind(wx.EVT_BUTTON, self.OnSaveBitmap)
+        
+
+        layout = [(self.loadClearButton,                    None),
+                  (wx.StaticText(self, wx.ID_ANY, "text:"), self.lableText),
+                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)),   None),
+                  (saveBitmap,                              None),
+                  (wx.Panel(self,wx.ID_ANY,size=(-1, 5)),   None)]
+                
+        ## arrange in grid 
+        self.createCenteredGrid(layout)
+   
+    def OnShowValues(self, event):
+        """load data from image and clear labels"""
+        self.wxapp.imagepanel.clearLabels()
+        self.wxapp.statusbar.SetStatusText("loading image data ...")
+        if self.wxapp.loadValues() == False:
+            self.loadClearButton.SetLabel("no data")
+            self.loadClearButton.Disable()
+            self.wxapp.statusbar.SetStatusText("Error loading image data!")
+        else:
+            self.loadClearButton.SetLabel("clear lables")
+            self.wxapp.statusbar.SetStatusText("")
+            if self.wxapp.rgbeImg.isIrridiance():
+                self.setLable("Lux")
+            else:
+                self.setLable("cd/m2")
+
+    def OnSaveBitmap(self, event):
+        """call imagepanel's saveBitmap() function"""
+        self.wxapp.imagepanel.saveBitmap()
+
+    def reset(self):
+        self.loadClearButton.SetLabel("load data")
+        self.setLable(" ")
+    
+    def setLable(self, text):
+        self.lableText.SetValue(text)
+
+
+
+
 class MyFoldPanelBar(fpb.FoldPanelBar):
     """base for FoldPanelBar in controlls panel"""
     
@@ -498,10 +539,10 @@ class MyFoldPanelBar(fpb.FoldPanelBar):
 class FoldableControlsPanel(wx.Panel):
     """combines individual feature panels"""
     
-    def __init__(self, parent, style=wx.DEFAULT_FRAME_STYLE):
+    def __init__(self, parent, wxapp, style=wx.DEFAULT_FRAME_STYLE):
 
         wx.Panel.__init__(self, parent, id=wx.ID_ANY)
-        self.parent = parent
+        self.wxapp = wxapp
         self.SetSize((140,350))
         self._layout()
         self.Bind(wx.EVT_SIZE, self.setBarSize)
@@ -511,16 +552,20 @@ class FoldableControlsPanel(wx.Panel):
                            
         bar = MyFoldPanelBar(self, style=fpb.FPB_DEFAULT_STYLE|fpb.FPB_VERTICAL)
 
-        item = bar.AddFoldPanel("display", collapsed=False)
-        self.displaycontrols = ViewControlPanel(item, self.parent)
-        bar.AddFoldPanelWindow(item, self.displaycontrols, flags=fpb.FPB_ALIGN_WIDTH)
-        
+        item = bar.AddFoldPanel("lables", collapsed=False)
+        self.lablecontrols = LablesControlPanel(item, self.wxapp)
+        bar.AddFoldPanelWindow(item, self.lablecontrols, flags=fpb.FPB_ALIGN_WIDTH)
+
         item = bar.AddFoldPanel("falsecolor", collapsed=True)
-        self.fccontrols = FalsecolorControlPanel(item, self.parent)
+        self.fccontrols = FalsecolorControlPanel(item, self.wxapp)
         bar.AddFoldPanelWindow(item, self.fccontrols, flags=fpb.FPB_ALIGN_WIDTH)
         
+        item = bar.AddFoldPanel("display", collapsed=True)
+        self.displaycontrols = DisplayControlPanel(item, self.wxapp)
+        bar.AddFoldPanelWindow(item, self.displaycontrols, flags=fpb.FPB_ALIGN_WIDTH)
+        
         item = bar.AddFoldPanel("misc", collapsed=True)
-        pc_controls = MiscControlPanel(item, self.parent)
+        pc_controls = MiscControlPanel(item, self.wxapp)
         bar.AddFoldPanelWindow(item, pc_controls)
         
         if hasattr(self, "pnl"):

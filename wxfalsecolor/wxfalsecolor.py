@@ -9,7 +9,7 @@ import os
 import traceback
 import wx
 
-VERSION="0.3"
+VERSION="0.4 alpha"
 LICENSE="""Copyright 2010 Thomas Bleicher. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -114,26 +114,22 @@ class HeaderDialog(wx.Frame):
 
 
 
-
-
-
 class wxFalsecolorFrame(wx.Frame):
 
     def __init__(self, args=[]):
-        wx.Frame.__init__(self,None,title = "wxImage - Radiance Picture Viewer")
+        wx.Frame.__init__(self, None, title="wxImage - Radiance Picture Viewer")
+	#self.SetBackgroundColour("white")
         
         ## menu
-        self._addMenu()
-        
+        #self._addMenu()
         ## image display
         self.imagepanel = ImagePanel(self)
-
         ## buttons
-        self._doButtonLayout()
+        panel = self._doButtonLayout()
 
         ## image - buttons layout
         self.sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.sizer.Add(self.panelSizer,   proportion=0, flag=wx.EXPAND)
+        self.sizer.Add(panel, proportion=0, flag=wx.EXPAND)
         self.sizer.Add(self.imagepanel, proportion=1, flag=wx.EXPAND)
         self.SetSizer(self.sizer)
         self.statusbar = self.CreateStatusBar()
@@ -153,20 +149,18 @@ class wxFalsecolorFrame(wx.Frame):
         self.Show()
 
 
-    def _addFileButtons(self):
+    def _addFileButtons(self, panel):
         """create top buttons"""
-        self.loadButton = wx.Button(self, wx.ID_ANY, label='open HDR')
+        self.loadButton = wx.Button(panel, wx.ID_ANY, label='open HDR')
         self.loadButton.Bind(wx.EVT_LEFT_DOWN, self.onLoadImage)
         self.panelSizer.Add(self.loadButton, proportion=0, flag=wx.EXPAND|wx.ALL, border=5 )
         
-        self.saveButton = wx.Button(self, wx.ID_ANY, label='save image')
+        self.saveButton = wx.Button(panel, wx.ID_ANY, label='save image')
         self.saveButton.Bind(wx.EVT_LEFT_DOWN, self.onSaveImage)
         self.saveButton.Disable()
         self.panelSizer.Add(self.saveButton, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5 )
         
-        spacepanel = wx.Panel(self,wx.ID_ANY,size=(-1,5))
-        if os.name == 'nt':
-            spacepanel.SetBackgroundColour((128,128,128))
+        spacepanel = wx.Panel(panel,wx.ID_ANY,size=(-1,5))
         self.panelSizer.Add(spacepanel, proportion=0, flag=wx.EXPAND)
 
 
@@ -209,20 +203,25 @@ class wxFalsecolorFrame(wx.Frame):
 
     def _doButtonLayout(self):
         """create buttons"""
+        panel = wx.Panel(self, style=wx.RAISED_BORDER)
+
         self.panelSizer = wx.BoxSizer(wx.VERTICAL)
         ## 'load' and 'save' buttons 
-        self._addFileButtons()
+        self._addFileButtons(panel)
         
         ## foldable controls panel
-        self._foldpanel = FoldableControlsPanel(self, wx.ID_ANY)
+        self._foldpanel = FoldableControlsPanel(panel, self, wx.ID_ANY)
+        self.lablecontrols = self._foldpanel.lablecontrols
         self.fccontrols = self._foldpanel.fccontrols
         self.displaycontrols = self._foldpanel.displaycontrols
         self.panelSizer.Add(self._foldpanel, proportion=1, flag=wx.EXPAND|wx.ALL, border=5)
         
         ## 'quit' button
-        quitbutton = wx.Button(self, wx.ID_EXIT, label='quit')
+        quitbutton = wx.Button(panel, wx.ID_EXIT, label='quit')
         quitbutton.Bind(wx.EVT_LEFT_DOWN,self.onQuit)
-        self.panelSizer.Add( quitbutton, proportion=0, flag=wx.EXPAND|wx.ALL|wx.ALIGN_BOTTOM, border=10 )
+        self.panelSizer.Add(quitbutton, proportion=0, flag=wx.EXPAND|wx.ALL|wx.ALIGN_BOTTOM, border=10)
+        panel.SetSizer(self.panelSizer)
+        return panel
 
 
     def doFalsecolor(self, args):
@@ -249,6 +248,11 @@ class wxFalsecolorFrame(wx.Frame):
             return self.rgbeImg.formatNumber(n)
         else:
             return str(n)
+
+
+    def getLableText(self):
+        """return text of lable text box"""
+        return self.lablecontrols.getLableText()
 
 
     def getRGBVAt(self, pos):
@@ -297,16 +301,18 @@ class wxFalsecolorFrame(wx.Frame):
     def _loadImageData(self):
         """load image data of small images immediately"""
         x,y = self.rgbeImg.getImageResolution()
+        ## TODO: preference setting for max image size
         if x*y <= 1000000:
             ## call OnShowValues with fake event
-            self.displaycontrols.OnShowValues(-1)
+            self.lablecontrols.OnShowValues(-1)
         else:
             self.statusbar.SetStatusText("confirm 'load data'")
             msg = "This is a large image.\nDo you want to load image data now?"
             dlg = wx.MessageDialog(self, message=msg, caption="Load data?", style=wx.YES_NO|wx.YES_DEFAULT|wx.ICON_QUESTION)
             if dlg.ShowModal() == wx.ID_YES:
-                self.displaycontrols.OnShowValues(-1)
+                self.lablecontrols.OnShowValues(-1)
             else:
+                self.lablecontrols.reset()
                 self.statusbar.SetStatusText("skipping 'load data'.")
 
 

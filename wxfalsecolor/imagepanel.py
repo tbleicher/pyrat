@@ -38,7 +38,7 @@ class ImagePanel(wx.Panel):
     """
     def __init__(self, parent, *args, **kwargs):
         wx.Panel.__init__(self, parent,
-                          style=wx.SUNKEN_BORDER|wx.NO_FULL_REPAINT_ON_RESIZE,
+                          style=wx.NO_FULL_REPAINT_ON_RESIZE,
                           *args, **kwargs)
         
         self.Bind(wx.EVT_SIZE, self.OnSize)
@@ -87,10 +87,10 @@ class ImagePanel(wx.Panel):
 
         ## format label text
         if self.rgbeImg.isIrridiance():
-            label = "%s lux" % self.parent.formatNumber(v)
+            label = "%s" % self.parent.formatNumber(v)
         else:
             lum = (r*0.265+g*0.67+b*0.065)*179
-            label = "%s cd/m2" % self.parent.formatNumber(lum)
+            label = "%s" % self.parent.formatNumber(lum)
         
         ## use minimal box to highlight spot location
         if dx == 0:
@@ -211,10 +211,14 @@ class ImagePanel(wx.Panel):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         font.SetWeight(wx.BOLD)
         gc.SetFont(font)
+        lableText = self.parent.getLableText()
+        if lableText.strip() != "":
+            lableText = " " + lableText
         for x,y,dx,dy,l in self._labels:
             if self._scale > 1:
                 x /= self._scale
                 y /= self._scale
+            l += lableText
             w,h = gc.GetTextExtent(l)
             path_spot = gc.CreatePath()
             path_spot.AddRectangle(-1,-1,dx,dy)
@@ -243,6 +247,7 @@ class ImagePanel(wx.Panel):
 
 
     def _drawTestPath(self, gc):
+        """debuging method"""
         BASE  = 80.0    # sizes used in shapes drawn below
         BASE2 = BASE/2
         BASE4 = BASE/4
@@ -389,7 +394,9 @@ class ImagePanel(wx.Panel):
         try:
             img = self._Buffer.ConvertToImage()
             w,h = img.GetSize()
-            if w > fw:
+            if w > fw and h > fh:
+                img = img.Size((fw,fh), (0,0))
+            elif w > fw:
                 img = img.Size((fw,h), (0,0))
             elif h > fh:
                 img = img.Size((w,fh), (0,0))
