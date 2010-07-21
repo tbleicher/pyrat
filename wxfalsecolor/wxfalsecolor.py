@@ -117,7 +117,6 @@ class HeaderDialog(wx.Frame):
 
 
 
-
 class wxFalsecolorFrame(wx.Frame):
 
     def __init__(self, args=[]):
@@ -280,6 +279,7 @@ class wxFalsecolorFrame(wx.Frame):
         if self.rgbeImg.error:
             msg = "Error loading image:\n%s" % self.rgbeImg.error
             self.showError(msg)
+            self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
         else:
             self.path = path
             self.filename = os.path.split(path)[1]
@@ -290,7 +290,29 @@ class wxFalsecolorFrame(wx.Frame):
             else:
                 self.fccontrols.reset()
             self.saveButton.Enable()
-        self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
+            self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
+	    self._loadImageData()
+
+
+    def _loadImageData(self):
+        """load image data of small images immediately"""
+        x,y = self.rgbeImg.getImageResolution()
+        if x*y <= 1000000:
+            ## call OnShowValues with fake event
+            self.displaycontrols.OnShowValues(-1)
+        else:
+            self.statusbar.SetStatusText("confirm 'load data'")
+            msg = "This is a large image.\nDo you want to load image data now?"
+            dlg = wx.MessageDialog(self, message=msg, caption="Load data?", style=wx.YES_NO|wx.YES_DEFAULT|wx.ICON_QUESTION)
+            if dlg.ShowModal() == wx.ID_YES:
+                self.displaycontrols.OnShowValues(-1)
+            else:
+                self.statusbar.SetStatusText("skipping 'load data'.")
+
+
+    def loadValues(self):
+        """load luminance/illuminance data from image"""
+        return self.rgbeImg.hasArrayData(self)
 
 
     def onLoadImage(self,event):
@@ -356,11 +378,6 @@ class wxFalsecolorFrame(wx.Frame):
             return False
         ## if nothing was found return False
         return False
-
-
-    def loadValues(self):
-        """load luminance/illuminance data from image"""
-        return self.rgbeImg.hasArrayData(self)
 
 
     def showAboutDialog(self):

@@ -437,11 +437,14 @@ class ViewControlPanel(BaseControlPanel):
     def OnShowValues(self, event):
         """load data from image and clear labels"""
         self.wxapp.imagepanel.clearLabels()
+        self.wxapp.statusbar.SetStatusText("loading image data ...")
         if self.wxapp.loadValues() == False:
             self.showValues.SetLabel("no data")
             self.showValues.Disable()
+            self.wxapp.statusbar.SetStatusText("Error loading image data!")
         else:
             self.showValues.SetLabel("clear labels")
+            self.wxapp.statusbar.SetStatusText("")
 
 
     def reset(self):

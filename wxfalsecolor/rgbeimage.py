@@ -200,16 +200,16 @@ class RGBEImage(FalsecolorImage):
         keepGoing = True
         dlg = wx.ProgressDialog("reading pixel values ...",
                                 "reading raw data ...",
-                                maximum = 6,
+                                maximum = 7,
                                 parent = wxparent,
-                                style = wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME|wx.PD_REMAINING_TIME)
+                                style = wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME)
 
         arr_red   = array.array('d')
         arr_green = array.array('d')
         arr_blue  = array.array('d')
         for i,channel in enumerate([(arr_red,"r"),(arr_green,"g"),(arr_blue,"b")]):
             arr,c = channel 
-            (keepGoing, foo) = dlg.Update(i+1, "reading channel %s ..." % c.upper())
+            (keepGoing, foo) = dlg.Update(i+1, "reading %s channel ..." % {'r':'red','g':'green','b':'blue'}[c])
             if keepGoing == False:
                 dlg.Destroy()
                 self._array = []
@@ -234,11 +234,11 @@ class RGBEImage(FalsecolorImage):
         arr_val = [(arr_red[i]*0.265+arr_green[i]*0.67+arr_blue[i]*0.065)*179 for i in range(len(arr_red))]
         
         ## convert to array or lines
-        dlg.Update(5, "building scanlines ...")
+        dlg.Update(5, "merging channels ...")
         pixels = zip(arr_red,arr_green,arr_blue,arr_val)
-        self._array = []
-        for y in range(yres):
-            self._array.append(pixels[y*xres:(y+1)*xres])
+        dlg.Update(6, "building scanlines ...")
+        self._array = [pixels[y*xres:(y+1)*xres] for y in range(yres)]
+
         dlg.Destroy()
         return True
 
