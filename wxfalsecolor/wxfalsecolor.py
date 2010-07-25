@@ -321,6 +321,14 @@ class wxFalsecolorFrame(wx.Frame):
         return self.rgbeImg.hasArrayData(self)
 
 
+    def onImagePanelClick(self):
+        """action on click on imagepanel"""
+        if self.imagepanel.hasLables():
+            self.lablecontrols.loadClearButton.Enable()
+        else:
+            self.lablecontrols.loadClearButton.Disable()
+
+
     def onLoadImage(self,event):
         """load new Radiance RGBE image"""
         filedialog = wx.FileDialog(self,

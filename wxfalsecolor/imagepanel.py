@@ -290,6 +290,10 @@ class ImagePanel(wx.Panel):
             return '' 
 
 
+    def hasLables(self):
+        return len(self._labels)
+
+
     def OnLeftDown(self, evt):
         """set dragging flag when left mouse button is pressed"""
         if self._scaledImg == None:
@@ -320,6 +324,7 @@ class ImagePanel(wx.Panel):
         self._dragging = False
         self._draggingFrame = (0,0)
         self.UpdateDrawing()
+        self.parent.onImagePanelClick()
 
 
     def OnMouseMotion(self, evt):

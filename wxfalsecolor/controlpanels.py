@@ -442,6 +442,7 @@ class LablesControlPanel(BaseControlPanel):
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.loadClearButton = wx.Button(self, wx.ID_ANY, "no data")
         self.loadClearButton.Bind(wx.EVT_BUTTON, self.OnShowValues)
+        self.loadClearButton.Disable()
         sizer.Add(self.loadClearButton, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
         
         lable = wx.StaticText(self, wx.ID_ANY, "text:")
@@ -471,10 +472,10 @@ class LablesControlPanel(BaseControlPanel):
     def OnShowValues(self, event):
         """load data from image and clear labels"""
         self.wxapp.imagepanel.clearLabels()
+        self.loadClearButton.Disable()
         self.wxapp.statusbar.SetStatusText("loading image data ...")
         if self.wxapp.loadValues() == False:
             self.loadClearButton.SetLabel("no data")
-            self.loadClearButton.Disable()
             self.wxapp.statusbar.SetStatusText("Error loading image data!")
         else:
             self.loadClearButton.SetLabel("clear lables")
@@ -493,6 +494,7 @@ class LablesControlPanel(BaseControlPanel):
         self.wxapp.imagepanel.UpdateDrawing()
 
     def reset(self):
+        self.loadClearButton.Enable()
         self.loadClearButton.SetLabel("load data")
         self.setLable(" ")
     
