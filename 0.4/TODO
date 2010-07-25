@@ -1,0 +1,24 @@
+
+KNOWN ISSUES
+============
+
+* wxfalsecolor does not do background images (-p or -ip)
+
+
+FEATURES
+========
+
+falsecolor2:
+------------
+
+* background colour option (limits of psign/pcomb?)
+
+* falsecolor compatibility mode (defaults)
+
+
+wxfalsecolor:
+-------------
+
+* preferences dialog and saving
+
+* handling of command line arguments like falsecolor2
