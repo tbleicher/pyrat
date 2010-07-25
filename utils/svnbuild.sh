@@ -94,8 +94,8 @@ svn co ${repopath} ${tempdir}
 if [[ ${HOME} == "/home/mobaxterm" ]]
 then
     echo "MOBAXTERM"
-    echo "sed s/REV/${revision}/ ./${tempdir}/${progname}.py"
-    sed s/REV/${revision}/  ./${tempdir}/${progname}.py
+    echo "sed -i s/REV/${revision}/ ./${tempdir}/${progname}.py"
+    sed -i s/REV/${revision}/  ./${tempdir}/${progname}.py
 else
     echo "sed -i '' s/REV/${revision}/ ./${tempdir}/${progname}.py"
     sed -i '' s/REV/${revision}/  ./${tempdir}/${progname}.py
