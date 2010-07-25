@@ -98,24 +98,24 @@ class FalsecolorControlPanel(BaseControlPanel):
         self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_extr)
         self.Bind(wx.EVT_CHECKBOX, self.updateFCButton, self.fc_zero)
         
-        layout = [(self.fc_type,                             None),
-                  (self.inside,                              self.legpos),
-                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)),    None),
-                  (wx.StaticText(self, wx.ID_ANY, "label:"), self.label),
-                  (wx.StaticText(self, wx.ID_ANY, "scale:"), self.scale),
-                  (wx.StaticText(self, wx.ID_ANY, "steps:"), self.steps),
-                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)),    None),
-                  (self.fc_log,                              self.logv),
-                  (self.fc_mask,                             self.maskv),
-                  (self.fc_col,                              None),
-                  (self.fc_extr,                             None),
-                  (self.fc_zero,                             None),
-                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)),    None),
-                  (wx.StaticText(self, wx.ID_ANY, "leg-w:"), self.legW),
-                  (wx.StaticText(self, wx.ID_ANY, "leg-h:"), self.legH),
-                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)),    None),
-                  (self.doFCButton,                          None),
-                  (wx.Panel(self,wx.ID_ANY,size=(-1,5)),     None)]
+        layout = [(self.fc_type,                              None),
+                  (self.inside,                               self.legpos),
+                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)),     None),
+                  (wx.StaticText(self, wx.ID_ANY, "legend:"), self.label),
+                  (wx.StaticText(self, wx.ID_ANY, "scale:"),  self.scale),
+                  (wx.StaticText(self, wx.ID_ANY, "steps:"),  self.steps),
+                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)),     None),
+                  (self.fc_log,                               self.logv),
+                  (self.fc_mask,                              self.maskv),
+                  (self.fc_col,                               None),
+                  (self.fc_extr,                              None),
+                  (self.fc_zero,                              None),
+                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)),     None),
+                  (wx.StaticText(self, wx.ID_ANY, "leg-w:"),  self.legW),
+                  (wx.StaticText(self, wx.ID_ANY, "leg-h:"),  self.legH),
+                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)),     None),
+                  (self.doFCButton,                           None),
+                  (wx.Panel(self,wx.ID_ANY,size=(-1,5)),      None)]
         
         ## arrange in grid 
         self.createCenteredGrid(layout)
@@ -230,41 +230,6 @@ class FalsecolorControlPanel(BaseControlPanel):
             self.legW.SetValue("400")
             self.legH.SetValue("50")
 
-
-
-class MiscControlPanel(wx.Panel):
-    
-    def __init__(self, parent, wxapp, *args, **kwargs):
-        wx.Panel.__init__(self, parent, *args, **kwargs)
-        self.wxapp = wxapp
-        self._layout()
-
-
-    def _layout(self):
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        showHeader = wx.Button(self, wx.ID_ANY, "show header")
-        showHeader.Bind(wx.EVT_BUTTON, self.OnShowHeader)
-        sizer.Add(showHeader, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
-        
-        spacer = wx.Panel(self, wx.ID_ANY, size=(-1,10))
-        sizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
-        
-        about = wx.Button(self, wx.ID_ANY, "about")
-        about.Bind(wx.EVT_BUTTON, self.OnAbout)
-        sizer.Add(about, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
-        
-        ## add spacer and set size
-        spacer = wx.Panel(self, wx.ID_ANY, size=(-1,5))
-        sizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
-        self.SetSizer(sizer)
-        self.SetInitialSize()
-
-    def OnAbout(self, event):
-        self.wxapp.showAboutDialog()
-
-    def OnShowHeader(self, event):
-        self.wxapp.showHeaders()
 
 
 
@@ -468,28 +433,41 @@ class DisplayControlPanel(BaseControlPanel):
 
 class LablesControlPanel(BaseControlPanel):
 
-    def getLableText(self):
-        return self.lableText.GetValue()
+    def __init__(self, parent, wxapp, *args, **kwargs):
+        wx.Panel.__init__(self, parent, *args, **kwargs)
+        self.wxapp = wxapp
+        self._layout()
 
-    def layout(self):
-        """creates layout of ximage buttons"""
+    def _layout(self):
+        sizer = wx.BoxSizer(wx.VERTICAL)
         self.loadClearButton = wx.Button(self, wx.ID_ANY, "no data")
         self.loadClearButton.Bind(wx.EVT_BUTTON, self.OnShowValues)
+        sizer.Add(self.loadClearButton, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5)
+        
+        lable = wx.StaticText(self, wx.ID_ANY, "text:")
         self.lableText = wx.TextCtrl(self, wx.ID_ANY, "")
+        self.Bind(wx.EVT_TEXT, self.OnTextChange, self.lableText)
+        hsizer = wx.BoxSizer(wx.HORIZONTAL)
+        hsizer.Add(lable, flag=wx.ALL, border=2)
+        hsizer.Add(self.lableText, proportion=1)
+        sizer.Add(hsizer, proportion=0, flag=wx.EXPAND|wx.ALL, border=10)
+        
+        spacer = wx.Panel(self, wx.ID_ANY, size=(-1,5))
+        sizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
         
         saveBitmap = wx.Button(self, wx.ID_ANY, "save bitmap")
         saveBitmap.Bind(wx.EVT_BUTTON, self.OnSaveBitmap)
+        sizer.Add(saveBitmap, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
         
+        ## add spacer and set size
+        spacer = wx.Panel(self, wx.ID_ANY, size=(-1,5))
+        sizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
+        self.SetSizer(sizer)
+        self.SetInitialSize()
 
-        layout = [(self.loadClearButton,                    None),
-                  (wx.StaticText(self, wx.ID_ANY, "text:"), self.lableText),
-                  (wx.Panel(self,wx.ID_ANY,size=(-1,10)),   None),
-                  (saveBitmap,                              None),
-                  (wx.Panel(self,wx.ID_ANY,size=(-1, 5)),   None)]
-                
-        ## arrange in grid 
-        self.createCenteredGrid(layout)
-   
+    def getLableText(self):
+        return self.lableText.GetValue()
+
     def OnShowValues(self, event):
         """load data from image and clear labels"""
         self.wxapp.imagepanel.clearLabels()
@@ -510,12 +488,52 @@ class LablesControlPanel(BaseControlPanel):
         """call imagepanel's saveBitmap() function"""
         self.wxapp.imagepanel.saveBitmap()
 
+    def OnTextChange(self, event):
+        """call imagepanel's saveBitmap() function"""
+        self.wxapp.imagepanel.UpdateDrawing()
+
     def reset(self):
         self.loadClearButton.SetLabel("load data")
         self.setLable(" ")
     
     def setLable(self, text):
         self.lableText.SetValue(text)
+
+
+
+
+class MiscControlPanel(wx.Panel):
+    
+    def __init__(self, parent, wxapp, *args, **kwargs):
+        wx.Panel.__init__(self, parent, *args, **kwargs)
+        self.wxapp = wxapp
+        self._layout()
+
+    def _layout(self):
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        showHeader = wx.Button(self, wx.ID_ANY, "show header")
+        showHeader.Bind(wx.EVT_BUTTON, self.OnShowHeader)
+        sizer.Add(showHeader, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
+        
+        spacer = wx.Panel(self, wx.ID_ANY, size=(-1,10))
+        sizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
+        
+        about = wx.Button(self, wx.ID_ANY, "about")
+        about.Bind(wx.EVT_BUTTON, self.OnAbout)
+        sizer.Add(about, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
+        
+        ## add spacer and set size
+        spacer = wx.Panel(self, wx.ID_ANY, size=(-1,5))
+        sizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
+        self.SetSizer(sizer)
+        self.SetInitialSize()
+
+    def OnAbout(self, event):
+        self.wxapp.showAboutDialog()
+
+    def OnShowHeader(self, event):
+        self.wxapp.showHeaders()
 
 
 

@@ -353,9 +353,10 @@ class ImagePanel(wx.Panel):
     def OnSize(self, evt):
         """create new buffer and update window"""
         size = self.GetClientSizeTuple()
-        self._Buffer = wx.EmptyBitmap(*size)
-        self.resizeImage(size)
-        self.UpdateDrawing()
+        if size != (0,0):
+            self._Buffer = wx.EmptyBitmap(*size)
+            self.resizeImage(size)
+            self.UpdateDrawing()
 
 
     def resizeImage(self, size):

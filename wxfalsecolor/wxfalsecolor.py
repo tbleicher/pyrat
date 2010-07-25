@@ -9,7 +9,7 @@ import os
 import traceback
 import wx
 
-VERSION="0.4 alpha"
+VERSION="0.4"
 LICENSE="""Copyright 2010 Thomas Bleicher. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -117,7 +117,7 @@ class HeaderDialog(wx.Frame):
 class wxFalsecolorFrame(wx.Frame):
 
     def __init__(self, args=[]):
-        wx.Frame.__init__(self, None, title="wxImage - Radiance Picture Viewer")
+        wx.Frame.__init__(self, None, title="wxFalsecolor - Radiance Picture Viewer")
 	#self.SetBackgroundColour("white")
         
         ## menu

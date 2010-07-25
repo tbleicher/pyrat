@@ -91,8 +91,16 @@ echo -e "\nchecking out ${progname} (revision=${revision})"
 svn co ${repopath} ${tempdir}
 
 ## replace "REV" in file with revision number
-echo "sed -i '' s/REV/${revision}/ ./${tempdir}/${progname}.py"
-sed -i '' s/REV/${revision}/  ./${tempdir}/${progname}.py
+if [[ ${HOME} == "/home/mobaxterm" ]]
+then
+    echo "MOBAXTERM"
+    echo "sed s/REV/${revision}/ ./${tempdir}/${progname}.py"
+    sed s/REV/${revision}/  ./${tempdir}/${progname}.py
+else
+    echo "sed -i '' s/REV/${revision}/ ./${tempdir}/${progname}.py"
+    sed -i '' s/REV/${revision}/  ./${tempdir}/${progname}.py
+fi
+grep VERSION ./${tempdir}/${progname}.py
 
 echo "python /drives/c/pyinstaller-1.4/Makespec.py --onefile --console --icon=${progname}.ico ${tempdir}/${progname}.py"
 python C:/pyinstaller-1.4/Makespec.py --onefile --console --icon=${progname}.ico ${tempdir}/${progname}.py
