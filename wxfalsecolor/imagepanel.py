@@ -78,6 +78,8 @@ class ImagePanel(wx.Panel):
         if self._scale > 1:
             x = int(x*self._scale)
             y = int(y*self._scale)
+            dx = int(dx*self._scale)
+            dy = int(dy*self._scale)
         if dx == 0:
             r,g,b,v = self.parent.getRGBVAt((x,y))
         else:
@@ -92,10 +94,6 @@ class ImagePanel(wx.Panel):
             lum = (r*0.265+g*0.67+b*0.065)*179
             label = "%s" % self.parent.formatNumber(lum)
         
-        ## use minimal box to highlight spot location
-        if dx == 0:
-            dx = 2
-            dy = 2
         self._labels.append((x,y, dx,dy, label))
 
 
@@ -211,22 +209,35 @@ class ImagePanel(wx.Panel):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         font.SetWeight(wx.BOLD)
         gc.SetFont(font)
+
         lableText = self.parent.getLableText()
         if lableText.strip() != "":
             lableText = " " + lableText
+        
         for x,y,dx,dy,l in self._labels:
-            if self._scale > 1:
-                x /= self._scale
-                y /= self._scale
+            x /= self._scale
+            y /= self._scale
+            if dx == 0:
+                dx = 2
+            else:
+                dx /= self._scale
+            if dy == 0:
+                dy = 2
+            else:
+                dy /= self._scale
+                
             l += lableText
             w,h = gc.GetTextExtent(l)
+            
             path_spot = gc.CreatePath()
             path_spot.AddRectangle(-1,-1,dx,dy)
             path_label = gc.CreatePath()
             path_label.AddRectangle(0,-1,w+3,h+1)
+            
             ## move to spot location
             gc.PushState()
             gc.Translate(x,y)
+            
             ## new state for label 
             gc.PushState()
             gc.SetPen(wx.Pen(wx.BLACK, 1))
@@ -239,6 +250,7 @@ class ImagePanel(wx.Panel):
             gc.DrawPath(path_label)
             gc.DrawText(l,2,0)
             gc.PopState()
+            
             ## back to spot state
             gc.SetPen(wx.Pen(wx.RED, 1))
             gc.SetBrush(wx.Brush(wx.RED, wx.TRANSPARENT))
