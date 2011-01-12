@@ -371,17 +371,21 @@ class ImagePanel(wx.Panel):
             return
         w,h = self.img.GetSize()
         size = self.GetSize()
-        if w != 0 and size[0] != 0:
+        if w != 0 and size[0] != 0 and size[1] != 0:
             scale_x = w / float(size[0])
             scale_y = h / float(size[1])
-            self._scale = max(scale_x,scale_y)
-            if self._scale != 0:
-                if self._scale > 1:
-                    self._scaledImg = self.img.Scale( int(w/self._scale), int(h/self._scale) )
-                else:
-                    self._scaledImg = self.img
-            self.SetSize(self._scaledImg.GetSize())
-            self.Refresh()
+            scale   = max(scale_x,scale_y)
+            
+            ## use rounded scale values to reduce resizing of image
+            if round(scale,1) != round(self._scale,1):
+                self._scale = scale
+                if self._scale != 0:
+                    if self._scale > 1:
+                        self._scaledImg = self.img.Scale( int(w/self._scale), int(h/self._scale) )
+                    else:
+                        self._scaledImg = self.img
+                    self.SetSize(self._scaledImg.GetSize())
+                    self.Refresh()
    
 
     def saveBitmap(self, path=''):
