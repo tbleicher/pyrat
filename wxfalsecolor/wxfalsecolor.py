@@ -113,6 +113,21 @@ class HeaderDialog(wx.Frame):
 
 
 
+class SplitStatusBar(wx.StatusBar):
+    """status bar with field to display zoom level"""
+
+    def __init__(self, parent):
+        wx.StatusBar.__init__(self, parent, -1)
+        self.SetFieldsCount(2)
+        self.SetStatusWidths([-6,-1])
+    
+    def setZoom(self, zoom):
+        if zoom == 0:
+            self.SetStatusText("", 1)
+        else:
+            self.SetStatusText("zoom 1:%.1f" % zoom, 1)
+
+
 
 class wxFalsecolorFrame(wx.Frame):
 
@@ -132,7 +147,10 @@ class wxFalsecolorFrame(wx.Frame):
         self.sizer.Add(panel, proportion=0, flag=wx.EXPAND)
         self.sizer.Add(self.imagepanel, proportion=1, flag=wx.EXPAND)
         self.SetSizer(self.sizer)
-        self.statusbar = self.CreateStatusBar()
+        #self.statusbar = self.CreateStatusBar()
+
+        self.statusbar = SplitStatusBar(self)
+        self.SetStatusBar(self.statusbar)
 
         self.rgbeImg = None
         self.img = None

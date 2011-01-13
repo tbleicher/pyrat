@@ -391,6 +391,7 @@ class ImagePanel(wx.Panel):
             ## use rounded scale values to reduce resizing of image
             if round(scale,1) != round(self._scale,1):
                 self._scale = scale
+                self.parent.statusbar.setZoom(self._scale)
                 if self._scale != 0:
                     if self._scale > 1:
                         self._scaledImg = self.img.Scale( int(w/self._scale), int(h/self._scale) )
