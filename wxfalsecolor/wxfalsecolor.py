@@ -138,6 +138,7 @@ class wxFalsecolorFrame(wx.Frame):
         self.img = None
         self.path = ""
         self.filename = ""
+        self.loadingCanceled = False
 
         self._ra2tiff = self._searchBinary("ra2tiff")
 

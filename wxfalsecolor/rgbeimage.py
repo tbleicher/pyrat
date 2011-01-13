@@ -35,6 +35,14 @@ class RGBEImage(FalsecolorImage):
         FalsecolorImage.__init__(self, *args)
 
 
+    def cancelLoading(self, dlg, wxparent):
+        """set flag when loading process has been canceled"""
+        dlg.Destroy()
+        wxparent.loadingCanceled = True
+        self._array = []
+        return
+
+
     def doFalsecolor(self, *args, **kwargs):
         """set legendoffset after falsecolor conversion"""
         FalsecolorImage.doFalsecolor(self, *args, **kwargs)
@@ -184,6 +192,7 @@ class RGBEImage(FalsecolorImage):
             if keepGoing == False:
                 dlg.Destroy()
                 self._array = []
+                wxparent.loadingCanceled = True
                 return
         dlg.Destroy()
         if len(self._array) != yres:
@@ -211,9 +220,8 @@ class RGBEImage(FalsecolorImage):
             arr,c = channel 
             (keepGoing, foo) = dlg.Update(i+1, "reading %s channel ..." % {'r':'red','g':'green','b':'blue'}[c])
             if keepGoing == False:
-                dlg.Destroy()
-                self._array = []
-                return
+                return self.cancelLoading(dlg, wxparent)
+            
             cmd = "pvalue -o -dd -h -H -p%s" % c.upper()
             data = self._popenPipeCmd(cmd, self._input)
             if self.error:
@@ -228,18 +236,47 @@ class RGBEImage(FalsecolorImage):
         ## calculate v from r,g,b 
         (keepGoing, foo) = dlg.Update(4, "calculating values ...")
         if keepGoing == False:
-            dlg.Destroy()
-            self._array = []
-            return
-        arr_val = [(arr_red[i]*0.265+arr_green[i]*0.67+arr_blue[i]*0.065)*179 for i in range(len(arr_red))]
+            return self.cancelLoading(dlg, wxparent)
         
-        ## convert to array or lines
-        dlg.Update(5, "merging channels ...")
-        pixels = zip(arr_red,arr_green,arr_blue,arr_val)
-        dlg.Update(6, "building scanlines ...")
-        self._array = [pixels[y*xres:(y+1)*xres] for y in range(yres)]
+        arr_val = [(arr_red[i]*0.265+arr_green[i]*0.67+arr_blue[i]*0.065)*179 for i in range(len(arr_red))]
+       
+        ## convert to array of lines
+        if len(arr_red) < 500000:
+            ## less feedback for small images
+            dlg.Update(5, "merging channels ...")
+            pixels = zip(arr_red,arr_green,arr_blue,arr_val)
+            dlg.Update(6, "building scanlines ...")
+            self._array = [pixels[y*xres:(y+1)*xres] for y in range(yres)]
+        
+        else:
+            ## create new dialog for large images
+            dlg.Destroy()
+            dlg = wx.ProgressDialog("merging channels ...",
+                                    "merging 0 % ...",
+                                    maximum = xres,
+                                    parent = wxparent,
+                                    style = wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME)
+            self._array = []
+            for i in range(xres):
+                ## update progress bar every ten lines
+                if i % 10 == 0:
+                    keepGoing, skip = dlg.Update(i, "merging line %d ..." % i)
+                    if keepGoing == False:
+                        return self.cancelLoading(dlg, wxparent)
 
+                ## handle data line by line
+                start  =     i * xres
+                end    = (i+1) * xres
+                reds   = arr_red[start:end] 
+                greens = arr_green[start:end] 
+                blues  = arr_blue[start:end]
+                vals   = arr_val[start:end]
+                pixels = zip(reds,greens,blues,vals)
+                self._array.append(pixels)
+
+        ## finaly close dialog
         dlg.Destroy()
+        wxparent.loadingCanceled = False
         return True
 
 

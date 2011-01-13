@@ -477,7 +477,12 @@ class LablesControlPanel(BaseControlPanel):
         if self.wxapp.loadValues() == False:
             self.loadClearButton.SetLabel("no data")
             self.wxapp.statusbar.SetStatusText("Error loading image data!")
+        elif self.wxapp.loadingCanceled == True:
+            self.wxapp.statusbar.SetStatusText("Loading of image data canceled.")
+            self.loadClearButton.SetLabel("load data")
+            self.loadClearButton.Enable()
         else:
+            ## if we have data
             self.loadClearButton.SetLabel("clear lables")
             self.wxapp.statusbar.SetStatusText("")
             if self.wxapp.rgbeImg.isIrridiance():
