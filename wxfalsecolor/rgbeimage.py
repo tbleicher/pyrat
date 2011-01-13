@@ -253,20 +253,20 @@ class RGBEImage(FalsecolorImage):
             dlg.Destroy()
             dlg = wx.ProgressDialog("merging channels ...",
                                     "merging 0 % ...",
-                                    maximum = xres,
+                                    maximum = yres,
                                     parent = wxparent,
                                     style = wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME)
             self._array = []
-            for i in range(xres):
+            for y in range(yres):
                 ## update progress bar every ten lines
-                if i % 10 == 0:
-                    keepGoing, skip = dlg.Update(i, "merging line %d ..." % i)
+                if y % 10 == 0:
+                    keepGoing, skip = dlg.Update(y, "merging line %d ..." % y)
                     if keepGoing == False:
                         return self.cancelLoading(dlg, wxparent)
 
                 ## handle data line by line
-                start  =     i * xres
-                end    = (i+1) * xres
+                start  =     y * xres
+                end    = (y+1) * xres
                 reds   = arr_red[start:end] 
                 greens = arr_green[start:end] 
                 blues  = arr_blue[start:end]
