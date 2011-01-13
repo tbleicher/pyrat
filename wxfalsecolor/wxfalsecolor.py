@@ -9,7 +9,7 @@ import os
 import traceback
 import wx
 
-VERSION="0.4"
+VERSION="0.42"
 LICENSE="""Copyright 2010 Thomas Bleicher. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -465,22 +465,6 @@ class wxFalsecolorFrame(wx.Frame):
             self.statusbar.SetStatusText("'%s':   x,y=(%d,%d)   %s" % (self.filename, pos[0],pos[1], value))
 
 
-    def updatePicturePanelOLD(self):
-        """recreate bitmap image"""
-        return
-        try:
-            ppm = self.rgbeImg.toPPM()
-            io = cStringIO.StringIO(ppm)
-            self.img = wx.ImageFromStream(io)
-            self.imagepanel.setImage(self.img)
-            self.imagepanel.rgbeImg = self.rgbeImg
-        except:
-            if self.rgbeImg.error:
-                msg = "Error creating falsecolor image:\n%s" % self.rgbeImg.error
-                self.showError(msg)
-            return
-        self.imagepanel.Refresh()
-   
 
 
 

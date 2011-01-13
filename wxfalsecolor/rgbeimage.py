@@ -143,64 +143,6 @@ class RGBEImage(FalsecolorImage):
         else:
             self._hasArray = self.readArrayDataBIN(wxparent)
             return self._hasArray
-        
-
-    def readArrayData(self, wxparent):
-        """read pixel data into array of (r,g,b,v) values"""
-        xres, yres = self.getImageResolution()
-        
-        ## start modal dialog to keep user informed
-        keepGoing = True
-        dlg = wx.ProgressDialog("reading pixel values ...",
-                                "reading raw data ...",
-                                maximum = yres+1,
-                                parent = wxparent,
-                                style = wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME|wx.PD_REMAINING_TIME)
-        
-        lines = self.getPValueLines()
-        if lines == False:
-            dlg.Destroy()
-            msg = "Error reading pixel values:\n%s" % self.error
-            self.showError(msg)
-            return False
-        
-        self._array = []
-        scanline = []
-        lineno = 0
-        for line in lines.split("\n"):
-            try:
-                x,y,r,g,b = line.split()
-                r = float(r)
-                g = float(g)
-                b = float(b)
-                if self._irridiance:
-                    v = (0.265*r+0.67*g+0.065*b)*self.mult
-                else:
-                    v = -1
-                scanline.append((r,g,b,v))
-            except:
-                pass
-            if len(scanline) == xres:
-                self._array.append(scanline)
-                scanline = []
-                lineno += 1
-                if lineno % 30 == 0:
-                    try:
-                        (keepGoing, foo) = dlg.Update(lineno, "converting image data ...")
-                    except:
-                        pass
-            if keepGoing == False:
-                dlg.Destroy()
-                self._array = []
-                wxparent.loadingCanceled = True
-                return
-        dlg.Destroy()
-        if len(self._array) != yres:
-            self._array = False
-            return False
-        else:
-            self._hasArray = True
-            return True
 
 
     def readArrayDataBIN(self, wxparent):
