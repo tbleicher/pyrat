@@ -4,7 +4,8 @@ import os
 import sys
 import tempfile
 import time
-import shlex, shutil
+import shlex
+import shutil
 import math
 import traceback
 from subprocess import Popen, PIPE
@@ -246,33 +247,31 @@ class FalsecolorLegend(FalsecolorBase):
         legW,legH = self.getImageSize(path) 
         imgW,imgH = self._image.getImageResolution()
         
-        ## offset table:     (         legX,          legY, imgX, imgY)
-        if self._within:
-            offsets = {'S' : ((imgW-legW)/2,             0,    0,    0),    
-                       'N' : ((imgW-legW)/2,     imgH-legH,    0,    0),    
-                       'SE': (    imgW-legW,             0,    0,    0),
-                       'NE': (    imgW-legW,     imgH-legH,    0,    0),
-                       'SW': (            0,             0,    0,    0),    
-                       'NW': (            0,     imgH-legH,    0,    0),    
-                       'E' : (    imgW-legW, (imgH-legH)/2,    0,    0),    
-                       'W' : (            0, (imgH-legH)/2,    0,    0),    
-                       'ES': (    imgW-legW,             0,    0,    0),    
-                       'WS': (            0,             0,    0,    0),    
-                       'EN': (    imgW-legW,     imgH-legH,    0,    0),
-                       'WN': (            0,     imgH-legH,    0,    0)}
-        else:
-            offsets = {'S' : ((imgW-legW)/2,             0,    0, legH),    
-                       'N' : ((imgW-legW)/2,          imgH,    0,    0),    
-                       'SE': (         imgW,             0,    0, legH),
-                       'NE': (         imgW,          imgH,    0,    0),
-                       'SW': (            0,             0,    0, legH),    
-                       'NW': (            0,          imgH,    0,    0),    
-                       'E' : (         imgW, (imgH-legH)/2,    0,    0),    
-                       'W' : (            0, (imgH-legH)/2, legW,    0),    
-                       'ES': (         imgW,             0,    0,    0),    
-                       'WS': (            0,             0, legW,    0),    
-                       'EN': (         imgW,     imgH-legH,    0,    0),
-                       'WN': (            0,     imgH-legH, legW,    0)}
+        ## offset table: ( pos,     legX,          legY, imgX, imgY)
+        offsets = {'-S' : ((imgW-legW)/2,             0,    0,    0),    
+                   '-N' : ((imgW-legW)/2,     imgH-legH,    0,    0),    
+                   '-SE': (    imgW-legW,             0,    0,    0),
+                   '-NE': (    imgW-legW,     imgH-legH,    0,    0),
+                   '-SW': (            0,             0,    0,    0),    
+                   '-NW': (            0,     imgH-legH,    0,    0),    
+                   '-E' : (    imgW-legW, (imgH-legH)/2,    0,    0),    
+                   '-W' : (            0, (imgH-legH)/2,    0,    0),    
+                   '-ES': (    imgW-legW,             0,    0,    0),    
+                   '-WS': (            0,             0,    0,    0),    
+                   '-EN': (    imgW-legW,     imgH-legH,    0,    0),
+                   '-WN': (            0,     imgH-legH,    0,    0),
+                   'S' :  ((imgW-legW)/2,             0,    0, legH),    
+                   'N' :  ((imgW-legW)/2,          imgH,    0,    0),    
+                   'SE':  (         imgW,             0,    0, legH),
+                   'NE':  (         imgW,          imgH,    0,    0),
+                   'SW':  (            0,             0,    0, legH),    
+                   'NW':  (            0,          imgH,    0,    0),    
+                   'E' :  (         imgW, (imgH-legH)/2,    0,    0),    
+                   'W' :  (            0, (imgH-legH)/2, legW,    0),    
+                   'ES':  (         imgW,             0,    0,    0),    
+                   'WS':  (            0,             0, legW,    0),    
+                   'EN':  (         imgW,     imgH-legH,    0,    0),
+                   'WN':  (            0,     imgH-legH, legW,    0)}
         
         ## build command line for final pcompos command
         legX,legY,imgX,imgY = offsets[self.position]
@@ -324,12 +323,12 @@ class FalsecolorLegend(FalsecolorBase):
         legx,legy = self.getImageSize(path)
         cmd = "pcompos -bg %.f %.f %.f" % self.bgcolor 
         if self.is_vertical():
-            if not self._within:
+            if not self.position.startswith("-"):
                 cmd += " -x %d" % self.width
             cmd += " \"%s\" %d %d" % (labimg, int((legx-labx)/2.0), legy)
             cmd += " \"%s\" %d %d" % (  path, 0, 0)
         else:
-            if not self._within:
+            if not self.position.startswith("-"):
                 cmd += " -y %d" % self.height
             cmd += " \"%s\" %d %d" % (labimg,    0, int((legy-laby)/2.0))
             cmd += " \"%s\" %d %d" % (  path, labx, 0)
@@ -452,7 +451,9 @@ class FalsecolorLegend(FalsecolorBase):
 
     def is_vertical(self):
         """return true if legend is vertical"""
-        if self.position.startswith("W") or self.position.startswith("E"):
+        if self.position.startswith("W") or self.position.startswith("-W"):
+            return True
+        if self.position.startswith("E") or self.position.startswith("-E"):
             return True
         else:
             return False
@@ -476,34 +477,34 @@ class FalsecolorLegend(FalsecolorBase):
         self._gradientOffX = 0
         self._gradientOffY = 0
         self._defaultsize = (True,True)
-        self._within = False
 
     def setLegendHeight(self, h):
         """set legend height"""
         self.height = h
         self._defaultsize = (self._defaultsize[1], False)
 
+    def setLegendWidth(self, w):
+        """set legend width"""
+        self.width = w
+        self._defaultsize = (False, self._defaultsize[0])
+
     def setPosition(self, pos):
         """check <pos> argument and set position"""
         pos = pos.upper()
+        within = ""
         if pos.startswith('-'):
-            self._within = True
             pos = pos[1:]
+            within = "-"
         if pos in 'WS W WN NW N NE EN E ES SE S SW'.split():
-            self.position = pos
             if pos.startswith('N') or pos.startswith('S'):
                 if self._defaultsize[0] == True:
                     self.width = 400
                 if self._defaultsize[1] == True:
                     self.height = 50
+            self.position = within + pos
             return True
         else:
             return False
-
-    def setLegendWidth(self, w):
-        """set legend width"""
-        self.width = w
-        self._defaultsize = (False, self._defaultsize[0])
 
 
 
