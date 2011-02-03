@@ -90,6 +90,49 @@ ba = bi(nfiles);
 
 """
 
+def showHelp():
+    """show usage message"""
+    options = [("-h", "", "print this help message to STDOUT\nBe careful with output redirection!"),
+
+    ("-i",  "IMG", "use IMG as input; the default is to read data from STDIN"), 
+    ("-p",  "IMG", "use IMG as background image"), 
+    ("-ip", "IMG", "use IMG as input and background image"), 
+
+    ("-s", "SCALE", "set maximum legend value to SCALE"),
+    ("-n", "STEPS", "create legend with STEPS subdivisions"),
+    ("-l", "LABEL", "use LABEL as legend title; default is \"Lux\" or \"cd/m2\""),
+    ("-log", "DEC", "create logarithmic scale with DEC decades below maximum"),
+
+    ("-lh", "HEIGHT", "set legend height in pixels"),
+    ("-lw", "WIDTH", "set legend width in pixels"),
+    ("-lp", "[-]WS|W|WN|NW|N|NE|EN|E|ES|SE|S|SW", "set legend position to the given direction (default EN);\nif preceded by \"-\" the legend will be within the image frame"),  
+
+    ("-cl", "", "create contour lines"),
+    ("-cb", "", "create contour bands"),
+
+    ("-e", "", "show values of brightest and darkest pixel"),
+    ("-z", "", "create legend with values starting at zero"),
+    ("-spec", "", "use old style color scheme"),
+    ("-mask", "MINV", "mask values below MINV with background colour (black)"),
+    
+    ("-d", "", "print detailed progress messages to STDERR"),	
+    ("-df","LOGFILE", "write detailed progress messages to LOGFILE\nLOGFILE can not start with '-'"), 
+    
+    ("-t", "TEMPDIR", "use TEMPDIR as temporary directory"),
+    ("-m", "MULTI", "set luminouse efficacy to MULTI; default is 179 Wh/m2"),
+    ("-r", "EXPR", "set mapping of red colour channel"),
+    ("-g", "EXPR", "set mapping of green colour channel"),
+    ("-b", "EXPR", "set mapping of blue colour channel")]
+
+    indent = "    " 
+    sys.stdout.write("\nABOUT:\n")
+    sys.stdout.write("\n%s%s (v%s,REV)\n" % (indent,sys.argv[0],VERSION))
+    sys.stdout.write("\nUSAGE:\n\n")
+    for o in options:
+        sys.stdout.write("%s%s %s\n" % (indent, o[0],o[1])) 
+        sys.stdout.write("%s%s%s\n\n" % (indent,indent, o[2].replace("\n", "\n"+indent+indent)))
+
+
 
 class NullHandler(logging.Handler):
     """handler to swallow all logging messages"""
@@ -102,29 +145,29 @@ class FalsecolorBase:
     """base class for falsecolor"""
     
     def __init__(self, log=None):
-        self.DEBUG = False
         self.tmpdir = ""
-        if log != None:
+        if log:
             self._log = log
         else:
-            self._initLog()
+            self._log = self._initLog()
 
-    def _initLog(self):
-        self._log = logging.getLogger("falsecolor2")
-        self._log.setLevel(logging.DEBUG)
-        h = NullHandler()
-        self._log.addHandler(h)
-    
 
-    def _clearTmpDir(self):
-	"""remove old temporary files and re-create directory"""
+    def _initLog(self, logname=""):
+        """start new logger instance with class identifier"""
+        if logname == "":
+            logname = self.__class__.__name__
+        log = logging.getLogger(logname)
+        log.setLevel(logging.DEBUG)
+        log.addHandler(NullHandler())
+        return log
+        
+
+    def _clearTmpDir(self, delta=86400):
+	"""remove temporary files older than <delta> sec and re-create directory"""
         if os.path.isdir(self.tmpdir):
             self._log.debug("clearing self.tmpdir='%s'" % self.tmpdir)
             try:
 		now = time.time()
-		delta = 86400   ## 24 hours
-		if self.DEBUG:
-		    delta = 60  ## 1 minute
 		## walk directory tree and delete files
 	        for root,dirs,files in os.walk(self.tmpdir, topdown=False):
 		    for name in files:
@@ -183,7 +226,7 @@ class FalsecolorBase:
         """create temporary directory"""
         if self.tmpdir != "":
             self.tmpdir = os.path.abspath(self.tmpdir)
-	    self._clearTmpDir()
+	    self._clearTmpDir(60)
         elif os.environ.has_key('_MEIPASS2'):
             ## use pyinstaller temp dir
             self.tmpdir = os.path.join(os.environ['_MEIPASS2'], 'wxfalsecolor')
@@ -204,15 +247,8 @@ class FalsecolorBase:
             parts = bdata.split("\n")[0].split()
             return (int(parts[3]),int(parts[1]))
         except Exception, err:
-            self._log.debug(str(err), True)
+            self._log.error(str(err))
             return (0,0)
-
-
-    def log(self, msg, is_error=False):
-        """append <msg> to log and write to stderr if DEBUG"""
-        self._log.debug(msg)
-        if self.DEBUG or is_error:
-            print >>sys.stderr, msg
 
 
     def _popenPipeCmd(self, cmd, data_in, data_out=PIPE):
@@ -233,13 +269,173 @@ class FalsecolorBase:
             return data
 
 
-    def writeLog(self, s=sys.stderr):
-        """write log to stderr"""
-        s.write("\nfalsecolor log:\n\n>> ")
-        s.write("\n>> ".join(self._log))
-        s.write("\n\n")
 
 
+class FalsecolorOptionParser(FalsecolorBase):
+
+    def __init__(self, log=None, args=[]):
+        FalsecolorBase.__init__(self, log)
+        self._settings = {}
+        self.error = ""
+        self._settings = {}
+        self._excluded_values = {'-log'  : [0],
+                                 '-n'    : [0],
+                                 '-m'    : [0],
+                                 '-s'    : [0],
+                                 '-mask' : [0]}
+        
+        if len(args) != 0:
+            self.parseOptions(args)
+
+
+    def getSettings(self):
+        return self._settings
+
+
+    def parseOptions(self, args):
+        """process command line options for FalsecolorImage"""
+        print >>sys.stderr, "parseOptions()", args
+        
+        self._log.debug("start of Parser.parseOptions()")
+        
+        ## set up dict for validators
+        validators = {
+            '-lw'   : ('setLegendWidth',    self._validateInt,    True),
+            '-lh'   : ('setLegendHeight',   self._validateInt,    True),
+            '-z'    : ('setLegendOffset',   self._validateBool,   False),
+            '-lp'   : ('setLegendPosition', self._validatePos,    True),
+            '-l'    : ('setLegendLabel',    self._validateTrue,   True),
+            '-log'  : ('setDecades',        self._validateInt,    True),
+            '-s'    : ('setScale',          self._validateScale,  True),
+            '-n'    : ('setSteps',          self._validateInt,    True),
+            '-mask' : ('mask',              self._validateFloat,  True),
+            '-r'    : ('redv',              self._validateTrue,   True),
+            '-g'    : ('grnv',              self._validateTrue,   True),
+            '-b'    : ('bluv',              self._validateTrue,   True),
+            '-i'    : ('picture',           self._validatePath,   True),
+            '-p'    : ('cpict',             self._validatePath,   True),
+            '-ip'   : ('setIPPath',         self._validatePath,   True),
+            '-cl'   : ('docont',            self._validateBool,   False),
+            '-cb'   : ('docont',            self._validateBool,   False),
+            '-m'    : ('mult',              self._validateFloat,  True),
+            '-t'    : ('setTmpdir',         self._validateTrue,   True),
+            '-d'    : ('_DEBUG',            self._validateTrue,   False),
+            '-df'   : ('_logfile',          self._validateTrue,   True),
+            '-e'    : ('doextrem',          self._validateTrue,   False)}
+
+        ## now loop over argument list
+        try:
+            self._validate(args, validators) 
+            if self.error:
+                return False
+        except IndexError, e:
+            self.error = "missing argument for option '%s'" % option
+            self._log.error(self.error)
+            return False
+
+        self._log.debug("end of Parser.parseOptions()")
+        return True
+ 
+        
+    def _validate(self, args, validators):
+        """test options and option values; set self.error on error"""
+        args.reverse()
+        while args:
+            k = args.pop()
+            if k == '-spec':
+                self._settings['redv'] = 'old_red(vin(v))'
+                self._settings['grnv'] = 'old_red(vin(v))'
+                self._settings['bluv'] = 'old_red(vin(v))'
+            
+            elif validators.has_key(k):
+                setting, validator, requires_arg = validators[k]
+                if requires_arg == True:
+                    v = args.pop()
+                else:
+                    v = True
+                v = validator(k,v)
+                if self.error != "":
+                    break
+                self._settings[setting] = v
+                self._log.debug("    %s = %s" % (k,v))
+            else:
+                self.error = "bad option \'%s\'" % str(k)
+                break
+
+
+    def _validateBool(self, k, v):
+        """return 'a' or 'b' depending on value of k"""
+        if k == '-cl':
+            return 'a'
+        elif k == '-cb':
+            return 'b'
+        elif k == '-z':
+            return 0.0
+        else:
+            self._log.warning("_validateCType used for unexpected key '%s'" % k)
+            return v
+
+
+    def _validateFloat(self, k, v):
+        """return true if v is Float"""
+        try:
+            f = float(v)
+        except ValueError:
+            self.error = "wrong value for option %s: '%s'" % [k,v]
+            return False
+        if f in self._excluded_values.get(k, []):
+            self.error = "illegal value for option %s: %.3f" % [k,f]
+        else:
+            return f
+    
+    
+    def _validateInt(self, k, v):
+        """return true if v is integer"""
+        try:
+            i = int(v)
+        except ValueError:
+            self.error = "wrong value for option %s: '%s'" % [k,v]
+            return False
+        if i in self._excluded_values.get(k, []):
+            self.error = "illegal value for option %s: %d" % [k,i]
+            return False
+        else:
+            return i
+   
+
+    def _validatePath(self, k, v):
+        """return true if v is existing file path"""
+        if os.path.isfile(v):
+            return v
+        else:
+            self.error = "no such file: \"%s\"" % args[0]
+            return False
+
+    
+    def _validatePos(self, k, v):
+        """validate position keyword for legend"""
+        v = v.upper()
+        within = ""
+        if v.startswith('-'):
+            v = v[1:]
+            within = "-"
+        if v in 'WS W WN NW N NE EN E ES SE S SW'.split():
+            return within + v
+        else:
+            self.error = "wrong option for '%s': '%s'" % [k,v]
+    
+
+    def _validateScale(self, k, v):
+        """add keyword to validation of scale value"""
+        if v.lower().startswith('a'):
+            return 'auto'
+        else:
+            return self._validateFloat(k,v)
+
+
+    def _validateTrue(self, k, v):
+        """return true in any case"""
+        return v
 
 
 
@@ -347,7 +543,7 @@ class FalsecolorLegend(FalsecolorBase):
             cmd += " \"%s\" %d %d" % (labimg,    0, int((legy-laby)/2.0))
             cmd += " \"%s\" %d %d" % (  path, labx, 0)
         path = self._createTempFileFromCmd(cmd)
-        self._log.debug("legend file='%s'" % path)
+        self._log.info("legend file='%s'" % path)
         return path  
         
 
@@ -364,7 +560,7 @@ class FalsecolorLegend(FalsecolorBase):
             textlist.append(self.formatNumber(value))
         if self.zerooff == 0:
             textlist.append(self.formatNumber(0))
-        self._log.debug( "legend text: '%s'" % str(textlist) )
+        self._log.info( "legend text: '%s'" % str(textlist) )
         if self.is_vertical():
             return self._createTextV(textlist)
         else:
@@ -380,11 +576,11 @@ class FalsecolorLegend(FalsecolorBase):
         cmd = "psign -s -.15 %s %s -h %d" % (fg,bg,self._textheight)
         text = "\n".join(textlist)
         path = self._createTempFileFromCmd(cmd, text+"\n")
+        self._log.debug("legtxt file='%s'" % path)
         if self.zerooff == 0:
             self.height = self._textheight * (len(textlist) - 1)
         else:
             self.height = self._textheight * len(textlist)
-        self._log.debug("legend file='%s'" % path)
         self._log.debug("new legend height='%d'" % self.height)
         return path
 
@@ -427,6 +623,7 @@ class FalsecolorLegend(FalsecolorBase):
 
     
     def _createTextHNumbers(self, textlist, textheight):
+        """return list of legend numbers and max width in pixels"""
         fg = "-cf %.f %.f %.f" % self.fgcolor
         bg = "-cb %.f %.f %.f" % self.bgcolor
         numbers = []
@@ -481,30 +678,34 @@ class FalsecolorLegend(FalsecolorBase):
         self.steps = 8
         self.scale = 1000
         self.decades = 0
-        self.position = "WS"
         self.fgcolor = (1,1,1)
         self.bgcolor = (0,0,0)
         self.zerooff = 0.5
         self._textheight = 26
+        self._position = "WS"
         self._legendOffX = 0
         self._legendOffY = 0
         self._gradientOffX = 0
         self._gradientOffY = 0
         self._defaultsize = (True,True)
 
-    def setLegendHeight(self, h):
+    def setHeight(self, h):
         """set legend height"""
         self.height = h
         self._defaultsize = (self._defaultsize[1], False)
 
-    def setLegendWidth(self, w):
+    def setWidth(self, w):
         """set legend width"""
         self.width = w
         self._defaultsize = (False, self._defaultsize[0])
+    
+    def getPosition(self):
+        """return legend position as keyword"""
+        return self._position
 
-    def setPosition(self, pos):
+    def setPosition(self, newpos):
         """check <pos> argument and set position"""
-        pos = pos.upper()
+        pos = newpos.upper()
         within = ""
         if pos.startswith('-'):
             pos = pos[1:]
@@ -515,10 +716,24 @@ class FalsecolorLegend(FalsecolorBase):
                     self.width = 400
                 if self._defaultsize[1] == True:
                     self.height = 50
-            self.position = within + pos
+            self._position = within + pos
+            self._log.debug("new position: '%s'" % self._position)
             return True
         else:
+            self._log.warning("position option '%s' ignored" % newpos)
             return False
+
+    position = property(getPosition, setPosition)
+
+
+    def setSteps(self, n):
+        """set new number of legend steps"""
+        if n <= 0:
+            self._log.warn("wrong value for legend steps: %d" % d)
+            return False
+        else:
+            self.steps = n
+            return True
 
 
 
@@ -526,10 +741,11 @@ class FalsecolorLegend(FalsecolorBase):
 class FalsecolorImage(FalsecolorBase):
     """convert Radiance image to falsecolor and add legend"""
 
-    def __init__(self, args=[], log=None):
+    def __init__(self, log=None, args=[]):
         """set defaults and parse command line args""" 
         FalsecolorBase.__init__(self, log)
         self.legend = FalsecolorLegend(self, self._log)
+        self.parser = FalsecolorOptionParser(self._log)
         self._input = ''
         self.picture = '-'
         self.cpict = ''
@@ -564,12 +780,11 @@ class FalsecolorImage(FalsecolorBase):
     def cleanup(self):
         """delete self.tmpdir - throws error on Windows (files still in use)"""
         if self.tmpdir != "":
-            if self.DEBUG:
-                self._log.debug("keeping tmpdir '%s'" % self.tmpdir)
+            self._log.debug("keeping tmpdir '%s'" % self.tmpdir)
             try:
                 shutil.rmtree(self.tmpdir)
             except WindowsError, err:
-                self._log.warning("cleanup() error: %s" % str(err))
+                self._log.warning("WindowsError: %s" % str(err))
 
 
     def _createCalFiles(self):
@@ -603,13 +818,20 @@ class FalsecolorImage(FalsecolorBase):
     
         if self.cpict == self.picture:
             self.cpict = ''
+    
+    
+    def _createLegend(self):
+        """create legend images and combine with image"""
+        combinecmd = self.legend.create()
+        if combinecmd != '':
+            self.data = self._popenPipeCmd(combinecmd, self.data)
 
 
     def doFalsecolor(self, keeptmp=False):
         """create part images, combine and store image data in self.data"""
         if self.error != "":
-            self._log.debug("falsecolor2 error: %s" % self.error, True)
-            return 
+            self._log.debug("falsecolor2 error: %s" % self.error)
+            return False 
         try:
             if not self._input:
                 self.readImageData()
@@ -618,25 +840,23 @@ class FalsecolorImage(FalsecolorBase):
             if self.data and self.mask > 0:
                 self.applyMask()
             if self.data:
-                cmd = self.legend.create()
-                if cmd != '':
-                    self.data = self._popenPipeCmd(cmd, self.data)
-                    self._log.debug("self.data=%d bytes" % len(self.data))
-                if self.doextrem is True:
-                    self.showExtremes()
+                self._createLegend()
+            if self.data and self.doextrem is True:
+                self.showExtremes()
+            
+            if self.data and self.error == "":
+                return True
             else:
                 self._log.error("no data in falsecolor image")
-                self.writeLog()
+                return False
 
         except Exception, e:
             self._log.error(str(e))
             self.error = str(e)
             traceback.print_exc(file=sys.stderr)
-            if not self.DEBUG:
-                self.writeLog()
         
         finally:
-            if keeptmp == False and self.DEBUG == False:
+            if keeptmp == False:
                 self.cleanup()
 
 
@@ -746,183 +966,70 @@ class FalsecolorImage(FalsecolorBase):
         self.ndivs = 8
         self.docont = ''
         self.doextrem = False
-        self.needfile = False
         self.error = ''
         self.zerooff = 0.5      # half step legend offset from zero
         self.legend.resetDefaults()
+    
+    def setDecades(self, n):
+        self.decades = n
+        self.legend.decades = n
+
+    def setScale(self, n):
+        self.scale = n
+        self.legend.scale = n
+
+    def setIPPath(self, path):
+        """set path to use as image and bg picture"""
+        self.picture = path
+        self.cpict = path
+    
+    def setLegendHeight(self, n):
+        self.legend.setHeight(n)
+
+    def setLegendLabel(self, s):
+        self.legend.label = s
+
+    def setLegendOffset(self, n):
+        """set offset for legend"""
+        self.zerooff = n
+        self.legend.zerooff = 0
+    
+    def setLegendPosition(self, s):
+        self.legend.setPosition(s)
+
+    def setLegendWidth(self, n):
+        self.legend.setWidth(n)
+
+    def setSteps(self, n):
+        """set number of legend steps"""
+        if self.legend.setSteps(n) == True:
+            self.ndivs = n
+
+    def setTmpdir(self, path):
+        """set directory to use for temporary files"""
+        self.tmpdir = path
+        self.legend.tmpdir = path
 
 
     def setOptions(self, args):
-        """check command line args"""
-       
-        ## if help is required show help and exit
-	if "-h" in args:
-	    self.showHelp()
-	    sys.exit(0)
+        """use parser to validate command line"""
+        if self.parser.parseOptions(args) != True:
+            self.error = parser.error
+            return False
 
-        ## check for debugging options first
-        if "-d" in args or "-df" in args:
-            self.DEBUG = True
-            self.legend.DEBUG = True
-            if "-d" in args:
-                h = logging.StreamHandler()
-                h.setLevel(logging.DEBUG)
-                f = logging.Formatter("%(name)s : %(levelname)-8s - %(message)s")
-                h.setFormatter(f)
-                self._log.addHandler(h)
-            if "-df" in args:
-                idx = args.index("-df") + 1
-                logfile = args[args.index("-df")+1]
-                if logfile.startswith("-"):
-                    print >>sys.stderr, "ERROR: log file name can't start with '-' (name='%s')" % logfile
-                    sys.exit(1)
-                h = logging.FileHandler(logfile)
-                h.setLevel(logging.DEBUG)
-                f = logging.Formatter("%(levelname)-8s in %(funcName)s : %(message)s")
-                h.setFormatter(f)
-                self._log.addHandler(h)
-            self._log.debug("begin setOptions() args=%s" % str(args))
-        
-        ## now loop over argument list
-        try:
-            while args:
-                if args[0] == '-lw':
-                    option = args.pop(0)
-                    self.legend.setLegendWidth(int(args[0]))
-                    self._log.debug("    -lw %s" % args[0])
-                elif args[0] == '-lh':
-                    option = args.pop(0)
-                    self.legend.setLegendHeight(int(args[0]))
-                    self._log.debug("    -lh %s" % args[0])
-                elif args[0] == '-lp':
-                    option = args.pop(0)
-                    if self.legend.setPosition(args[0]) != True:
-                        self.error = "illegal argument for '-lp': '%s'" % args[0]
-                        break
-                    self._log.debug("    -lp %s" % args[0])
-
-                elif args[0] == '-log':
-                    option = args.pop(0)
-                    self.decades = int(args[0])
-                    self.legend.decades = int(args[0])
-                    self._log.debug("    -log %d" % int(args[0]))
-                elif args[0] == '-s':
-                    option = args.pop(0)
-                    if args[0].startswith("a") or args[0].startswith("A"):
-                        self.scale = "auto"
-                    else:
-                        self.scale = float(args[0])
-                        self.legend.scale = float(args[0])
-                elif args[0] == '-n':
-                    option = args.pop(0)
-                    self.ndivs = int(args[0])
-                    self.legend.steps = int(args[0])
-                    if self.ndivs == 0:
-                        self.error = "illegal argument for '-n': '%s'" % args[0]
-                        break
-                    self._log.debug("    -n %d" % int(args[0]))
-
-                elif args[0] == '-l':
-                    option = args.pop(0)
-                    self.legend.label = args[0]
-                    self._log.debug("    -l %s" % args[0])
-
-                elif args[0] == '-spec':
-		    self.redv='old_red(vin(v))'
-		    self.grnv='old_grn(vin(v))'
-		    self.bluv='old_blu(vin(v))'
-                
-                elif args[0] == '-mask':
-                    option = args.pop(0)
-                    self.mask = float(args[0])
-                    self._log.debug("    -l %.3f" % float(args[0]))
-
-                elif args[0] == '-r':
-                    option = args.pop(0)
-                    self.redv = args[0]
-                elif args[0] == '-g':
-                    option = args.pop(0)
-                    self.grnv = args[0]
-                elif args[0] == '-b':
-                    option = args.pop(0)
-                    self.bluv = args[0]
-                
-                ## input and background image
-                elif args[0] == '-i':
-                    option = args.pop(0)
-                    if os.path.isfile(args[0]):
-                        self.picture = args[0]
-                    else:
-                        self.error = "no such file: \"%s\"" % args[0]
-                        break
-                    self._log.debug("    -i \"%s\"" % args[0])
-
-                elif args[0] == '-p':
-                    option = args.pop(0)
-                    if os.path.isfile(args[0]):
-                        self.cpict = args[0]
-                    else:
-                        self.error = "no such file: \"%s\"" % args[0]
-                        break
-                    self._log.debug("    -p \"%s\"" % args[0])
-                
-                elif args[0] == '-ip' or args[0] == '-pi':
-                    option = args.pop(0)
-                    if os.path.isfile(args[0]):
-                        self.picture = args[0]
-                        self.cpict = args[0]
-                    else:
-                        self.error = "no such file: \"%s\"" % args[0]
-                        break
-                    self._log.debug("    -ip \"%s\"" % args[0])
-
-                ## contour line and band option
-                elif args[0] == '-cl':
-                    self.docont = 'a'
-                    self._log.debug("    -cl [contour lines]")
-                elif args[0] == '-cb':
-                    self.docont = 'b'
-                    self._log.debug("    -cb [contour bands]")
-
-                elif args[0] == '-m':
-                    option = args.pop(0)
-                    self.mult = float(args[0])
-                    self._log.debug("    -m %.2f" % float(args[0]))
-                
-                elif args[0] == '-t':
-                    option = args.pop(0)
-                    self.tmpdir = args[0]
-                    self.legend.tmpdir = args[0]
-                
-                elif args[0] == '-d':
-                    self.DEBUG = True
-                elif args[0] == '-df':
-                    option = args.pop(0)
-                
-                elif args[0] == '-e':
-                    self.doextrem = True
-                    self.needfile = True
-                    self._log.debug("    -e [show extremes]")
-                
-                elif args[0] == '-z':
-                    self.zerooff = 0.0
-                    self.legend.zerooff = 0.0
-                    self._log.debug("    -z [legend starts with 0]")
-
+        else:
+            settings = self.parser.getSettings()
+            for k,v in settings.items():
+                self._log.debug("    applying attribute '%s'" % k)
+                if k.startswith("_"):
+                    pass
+                elif k.startswith('set'):
+                    getattr(self, k)(v)
+                elif self.__dict__.has_key(k):
+                    self.__dict__[k] = v
                 else:
-                    self.error = "bad option \"%s\"" % args[0]
-                    break
-                args.pop(0)
-
-        except ValueError, e:
-            self.error = "bad value for option '%s': '%s'" % (option,args[0])
-            self._log.error(self.error)
-
-        except IndexError, e:
-            self.error = "missing argument for option '%s'" % option
-            self._log.error(self.error)
-
-        self._log.debug("end of setOptions()")
+                    self._log.error("    unknown option '%s'" % k)
+            return True
 
 
     def showExtremes(self):
@@ -949,47 +1056,6 @@ class FalsecolorImage(FalsecolorBase):
         self.data = self._popenPipeCmd(cmd, self.data)
 
 
-    def showHelp(self):
-        """show usage message"""
-        options = [("-h", "", "show this help message"),
-
-        ("-i",  "IMG", "use IMG as input; the default is to read data from STDIN"), 
-        ("-p",  "IMG", "use IMG as background image"), 
-        ("-ip", "IMG", "use IMG as input and background image"), 
-
-        ("-s", "SCALE", "set maximum legend value to SCALE"),
-        ("-n", "STEPS", "create legend with STEPS subdivisions"),
-        ("-l", "LABEL", "use LABEL as legend title; default is \"Lux\" or \"cd/m2\""),
-        ("-log", "DEC", "create logarithmic scale with DEC decades below maximum"),
-
-        ("-lh", "HEIGHT", "set legend height in pixels"),
-        ("-lw", "WIDTH", "set legend width in pixels"),
-        ("-lp", "[-]WS|W|WN|NW|N|NE|EN|E|ES|SE|S|SW", "set legend position to the given direction (default EN);\nif preceded by \"-\" the legend will be within the image frame"),  
-
-        ("-cl", "", "create contour lines"),
-        ("-cb", "", "create contour bands"),
-
-        ("-e", "", "show values of brightest and darkest pixel"),
-        ("-z", "", "create legend with values starting at zero"),
-        ("-spec", "", "use old style color scheme"),
-        ("-mask", "MINV", "mask values below MINV with background colour (black)"),
-        
-        ("-d", "", "print detailed progress messages to STDERR"),	
-        ("-df","LOGFILE", "write detailed progress messages to LOGFILE"), 
-        
-        ("-t", "TEMPDIR", "use TEMPDIR as temporary directory"),
-        ("-m", "MULTI", "set luminouse efficacy to MULTI; default is 179 Wh/m2"),
-        ("-r", "EXPR", "set mapping of red colour channel"),
-        ("-g", "EXPR", "set mapping of green colour channel"),
-        ("-b", "EXPR", "set mapping of blue colour channel")]
-
-        indent = "    " 
-        sys.stdout.write("\nABOUT:\n")
-        sys.stdout.write("\n%s%s (v%s,REV)\n" % (indent,sys.argv[0],VERSION))
-        sys.stdout.write("\nUSAGE:\n\n")
-        for o in options:
-            sys.stdout.write("%s%s %s\n" % (indent, o[0],o[1])) 
-            sys.stdout.write("%s%s%s\n\n" % (indent,indent, o[2].replace("\n", "\n"+indent+indent)))
 
 
     def toBMP(self, data=''):
@@ -1010,18 +1076,89 @@ class FalsecolorImage(FalsecolorBase):
 
 
 
+class ConsoleInterface:
+
+    def __init__(self, logname=""):
+        self._log = self._initLog(logname)
+
+    def _initLog(self, logname):
+        """start new logger instance with class identifier"""
+        if logname == "":
+            logname = sys.argv[0]
+        self._logname = logname
+        log = logging.getLogger(logname)
+        log.setLevel(logging.DEBUG)
+
+        self._logHandler = logging.StreamHandler()
+        self._logHandler.setLevel(logging.WARNING)
+        format = logging.Formatter("[%(levelname)1.1s] - %(name)s : %(message)s")
+        self._logHandler.setFormatter(format)
+        log.addHandler(self._logHandler)
+        return log
+
+    def main(self):
+        """check help and debug options and create fc image"""
+        if "-h" in sys.argv[1:]:
+            showHelp()
+            self.exit()
+        
+        args = self.setDebug(sys.argv[1:])
+        args = self.setDebugFile(args)
+        fc_img = FalsecolorImage(self._log)
+
+        if fc_img.setOptions(args) == True:
+            fc_img.doFalsecolor()
+        if fc_img.error:
+            self.exit(fc_img.error)
+        else:
+            if os.name == 'nt':
+                import msvcrt
+                msvcrt.setmode(1,os.O_BINARY)
+            sys.stdout.write(fc_img.data)
+        self.exit()
+
+    def exit(self, error=None):
+        """close logger and exit"""
+        logging.shutdown()
+        if not error:
+            sys.exit(0)
+        else:
+            print >>sys.stderr, "[E] %s : %s" % (self._logname, str(error))
+
+    def setDebug(self, args):
+        """create and format console log handler"""
+        if "-d" in args:
+            self._logHandler.setLevel(logging.WARNING)
+            del args[args.index('-d')]
+        return args
+
+    def setDebugFile(self, args):
+        """create and format file log handler"""
+        if "-df" in args:
+            idx = args.index("-df") + 1
+            if idx == len(args):
+                self.exit("missing filename argument for option '-df'")
+            logfile = args[idx]
+            if logfile.startswith("-"):
+                self.exit("log file name can't start with '-' (name='%s')" % logfile)
+            self._setDebugFileHandler(logfile)
+            del args[idx:idx+2]
+        return args
+    
+    def _setDebugFileHandler(self, logfile):
+        """create and format file log handler"""
+        h = logging.FileHandler(logfile)
+        h.setLevel(logging.DEBUG)
+        f = logging.Formatter("%(levelname)5.5s in %(name)s (%(funcName)s) : %(message)s")
+        h.setFormatter(f)
+        self._log.addHandler(h)
+
+
+
+
 if __name__ == "__main__":
-    # create falsecolor image and write to stdout - like falsecolor.csh
-    fc_img = FalsecolorImage(sys.argv[1:])
-    fc_img.doFalsecolor()
-    if fc_img.error:
-        print >>sys.stderr, "falsecolor.py error:", fc_img.error
-        sys.exit(1)
-    else:
-        if os.name == 'nt':
-            import msvcrt
-            msvcrt.setmode(1,os.O_BINARY)
-        sys.stdout.write(fc_img.data)
-        sys.exit(0)
+    ci = ConsoleInterface(sys.argv[0])
+    ci.main()
+
 
 
