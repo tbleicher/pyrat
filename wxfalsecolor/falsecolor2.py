@@ -1014,15 +1014,14 @@ if __name__ == "__main__":
     # create falsecolor image and write to stdout - like falsecolor.csh
     fc_img = FalsecolorImage(sys.argv[1:])
     fc_img.doFalsecolor()
-    if os.name == 'nt':
-        import msvcrt
-        msvcrt.setmode(1,os.O_BINARY)
-    sys.stdout.write(fc_img.data)
-
     if fc_img.error:
         print >>sys.stderr, "falsecolor.py error:", fc_img.error
         sys.exit(1)
     else:
+        if os.name == 'nt':
+            import msvcrt
+            msvcrt.setmode(1,os.O_BINARY)
+        sys.stdout.write(fc_img.data)
         sys.exit(0)
 
 
