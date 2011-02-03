@@ -8,6 +8,7 @@ import shlex
 import shutil
 import math
 import traceback
+import logging
 from subprocess import Popen, PIPE
 
 VERSION="0.3"
@@ -89,19 +90,36 @@ ba = bi(nfiles);
 
 """
 
+
+class NullHandler(logging.Handler):
+    """handler to swallow all logging messages"""
+    def emit(self, record):
+        pass
+
+
+
 class FalsecolorBase:
     """base class for falsecolor"""
     
-    def __init__(self):
+    def __init__(self, log=None):
         self.DEBUG = False
         self.tmpdir = ""
-        self._log = []
+        if log != None:
+            self._log = log
+        else:
+            self._initLog()
 
+    def _initLog(self):
+        self._log = logging.getLogger("falsecolor2")
+        self._log.setLevel(logging.DEBUG)
+        h = NullHandler()
+        self._log.addHandler(h)
+    
 
     def _clearTmpDir(self):
 	"""remove old temporary files and re-create directory"""
         if os.path.isdir(self.tmpdir):
-            self.log("clearing self.tmpdir='%s'" % self.tmpdir)
+            self._log.debug("clearing self.tmpdir='%s'" % self.tmpdir)
             try:
 		now = time.time()
 		delta = 86400   ## 24 hours
@@ -112,19 +130,18 @@ class FalsecolorBase:
 		    for name in files:
 		        p = os.path.join(root, name)
 			if os.stat(p).st_mtime < (now - delta):
-			    self.log("      deleting file '%s'" % p)
+			    self._log.debug("      deleting file '%s'" % p)
 	                    os.remove(p)
 		    for name in dirs:
 		        p = os.path.join(root, name)
 			if os.stat(p).st_mtime < (now - delta):
-			    self.log("      deleting dir '%s'" % p)
+			    self._log.debug("      deleting dir '%s'" % p)
 	                    os.rmdir(p)
 	        ## finally recreate self.tmpdir
 		if not os.path.isdir(self.tmpdir):
 		    os.mkdir(self.tmpdir)
             except OSError, err:
-	        if self.DEBUG:
-                    self.log("warning: %s" % str(err))
+                self._log.warning(str(err))
 	else:
 	    os.mkdir(self.tmpdir)
 
@@ -133,13 +150,13 @@ class FalsecolorBase:
         """write input data to temporary file"""
         if data == None:
             if self._input == '':
-                self.log("_createTempFile(): data available", 1)
+                self._log.error("_createTempFile(): data available")
                 return False
             data = self._input
 
         self._createTmpDir()
         fd,path = tempfile.mkstemp(suffix=".hdr",dir=self.tmpdir)
-        self.log("temppath='%s'" % path)
+        self._log.debug("temppath='%s'" % path)
         f = open(path, "wb")
         f.write(data)
         f.close()
@@ -150,14 +167,15 @@ class FalsecolorBase:
         """create tmp file as stdout for <cmd> and return file path"""
 	self._createTmpDir()
         fd,path = tempfile.mkstemp(suffix=".hdr",dir=self.tmpdir)
-        self.log("temppath='%s'" % path)
+        self._log.debug("temppath='%s'" % path)
         f = open(path, "wb")
 	try:
 	    data = self._popenPipeCmd(cmd, stdin, f)
 	    if os.name == 'nt':
 	        path = path.replace("\\","\\\\")
 	    return path
-        except OSError:
+        except OSError, err:
+            self._log.error(str(err))
             f.close()
 
 
@@ -173,7 +191,7 @@ class FalsecolorBase:
         else:
             self.tmpdir = tempfile.mkdtemp()
         
-        self.log("self.tmpdir='%s'" % self.tmpdir)
+        self._log.debug("self.tmpdir='%s'" % self.tmpdir)
     
 
     def getImageSize(self, path):
@@ -186,12 +204,13 @@ class FalsecolorBase:
             parts = bdata.split("\n")[0].split()
             return (int(parts[3]),int(parts[1]))
         except Exception, err:
-            self.log(str(err), True)
+            self._log.debug(str(err), True)
             return (0,0)
+
 
     def log(self, msg, is_error=False):
         """append <msg> to log and write to stderr if DEBUG"""
-        self._log.append(msg)
+        self._log.debug(msg)
         if self.DEBUG or is_error:
             print >>sys.stderr, msg
 
@@ -200,9 +219,9 @@ class FalsecolorBase:
         """pass <data_in> to process <cmd> and return results"""
         ## convert cmd to (non-unicode?) string for subprocess
 	cmd = str(cmd)
-        self.log("cmd= %s" % str(shlex.split(cmd)))
+        self._log.debug("cmd= %s" % str(shlex.split(cmd)))
         if data_in:
-            self.log("data_in= %d bytes" % len(data_in))
+            self._log.debug("data_in= %d bytes" % len(data_in))
 	p = Popen(shlex.split(cmd), bufsize=-1, stdin=PIPE, stdout=data_out, stderr=PIPE)
         data, err = p.communicate(data_in)
 	
@@ -210,7 +229,7 @@ class FalsecolorBase:
             self.error = err.strip()
             raise Exception, err.strip()
         if data:
-            self.log("data_out= %d bytes" % len(data))
+            self._log.debug("data_out= %d bytes" % len(data))
             return data
 
 
@@ -229,14 +248,9 @@ class FalsecolorLegend(FalsecolorBase):
 
     def __init__(self, img, log=None):
         
-        FalsecolorBase.__init__(self)
+        FalsecolorBase.__init__(self, log)
         self._image = img
-        
         self.resetDefaults()
-        if log == None:
-            self._log = []
-        else:
-            self._log = log
 
 
     def create(self):
@@ -297,7 +311,7 @@ class FalsecolorLegend(FalsecolorBase):
 
         cmd = "pcomb %s %s -x %d -y %d" % (self.pc0args, args, colwidth, colheight) 
         path = self._createTempFileFromCmd(cmd)
-        self.log("gradient file='%s'" % path)
+        self._log.debug("gradient file='%s'" % path)
         return path  
 
         
@@ -333,7 +347,7 @@ class FalsecolorLegend(FalsecolorBase):
             cmd += " \"%s\" %d %d" % (labimg,    0, int((legy-laby)/2.0))
             cmd += " \"%s\" %d %d" % (  path, labx, 0)
         path = self._createTempFileFromCmd(cmd)
-        self.log("legend file='%s'" % path)
+        self._log.debug("legend file='%s'" % path)
         return path  
         
 
@@ -350,7 +364,7 @@ class FalsecolorLegend(FalsecolorBase):
             textlist.append(self.formatNumber(value))
         if self.zerooff == 0:
             textlist.append(self.formatNumber(0))
-        self.log( "legend text: '%s'" % str(textlist) )
+        self._log.debug( "legend text: '%s'" % str(textlist) )
         if self.is_vertical():
             return self._createTextV(textlist)
         else:
@@ -370,8 +384,8 @@ class FalsecolorLegend(FalsecolorBase):
             self.height = self._textheight * (len(textlist) - 1)
         else:
             self.height = self._textheight * len(textlist)
-        self.log("legend file='%s'" % path)
-        self.log("new legend height='%d'" % self.height)
+        self._log.debug("legend file='%s'" % path)
+        self._log.debug("new legend height='%d'" % self.height)
         return path
 
 
@@ -387,7 +401,7 @@ class FalsecolorLegend(FalsecolorBase):
             incr = self.width/(len(textlist)-1)
         if incr < max_x:
             textheight = int(self._textheight * (incr / float(max_x)))
-            self.log("adjusting text height for legend: %d" % textheight)
+            self._log.debug("adjusting text height for legend: %d" % textheight)
             numbers, max_x = self._createTextHNumbers(textlist, textheight)
             self._legendOffY = int((self._textheight-textheight)/float(2))
         
@@ -512,10 +526,10 @@ class FalsecolorLegend(FalsecolorBase):
 class FalsecolorImage(FalsecolorBase):
     """convert Radiance image to falsecolor and add legend"""
 
-    def __init__(self, args=[]):
+    def __init__(self, args=[], log=None):
         """set defaults and parse command line args""" 
-        FalsecolorBase.__init__(self)
-        self.legend = FalsecolorLegend(self)
+        FalsecolorBase.__init__(self, log)
+        self.legend = FalsecolorLegend(self, self._log)
         self._input = ''
         self.picture = '-'
         self.cpict = ''
@@ -526,7 +540,6 @@ class FalsecolorImage(FalsecolorBase):
         self.tmpdir = ''
         self._irridiance = False
         self._resolution = (0,0)
-        
 
         if len(args) > 0:
             self.setOptions(args)
@@ -544,7 +557,7 @@ class FalsecolorImage(FalsecolorBase):
         mv = self.mask / self.mult
         args = "-e ro=if(li(2)-%f,ri(1),0);go=if(li(2)-%f,gi(1),0);bo=if(li(2)-%f,bi(1),0);" % (mv,mv,mv)
         cmd = str("pcomb %s - \"%s\"" % (args, maskImg))
-        self.log( "applyMask cmd= %s" % str(shlex.split(cmd)) )
+        self._log.debug( "applyMask cmd= %s" % str(shlex.split(cmd)) )
         self.data = self._popenPipeCmd(cmd, self.data)
 
 
@@ -552,11 +565,11 @@ class FalsecolorImage(FalsecolorBase):
         """delete self.tmpdir - throws error on Windows (files still in use)"""
         if self.tmpdir != "":
             if self.DEBUG:
-                self.log("keeping tmpdir '%s'" % self.tmpdir)
+                self._log.debug("keeping tmpdir '%s'" % self.tmpdir)
             try:
                 shutil.rmtree(self.tmpdir)
-            except WindowsError,e:
-                self.log("falsecolor cleanup() error: %s" % str(e))
+            except WindowsError, err:
+                self._log.warning("cleanup() error: %s" % str(err))
 
 
     def _createCalFiles(self):
@@ -595,7 +608,7 @@ class FalsecolorImage(FalsecolorBase):
     def doFalsecolor(self, keeptmp=False):
         """create part images, combine and store image data in self.data"""
         if self.error != "":
-            self.log("falsecolor2 error: %s" % self.error, True)
+            self._log.debug("falsecolor2 error: %s" % self.error, True)
             return 
         try:
             if not self._input:
@@ -608,15 +621,15 @@ class FalsecolorImage(FalsecolorBase):
                 cmd = self.legend.create()
                 if cmd != '':
                     self.data = self._popenPipeCmd(cmd, self.data)
-                    self.log("self.data=%d bytes" % len(self.data))
+                    self._log.debug("self.data=%d bytes" % len(self.data))
                 if self.doextrem is True:
                     self.showExtremes()
             else:
-                self.log("ERROR: no data in falsecolor image", True)
+                self._log.error("no data in falsecolor image")
                 self.writeLog()
 
         except Exception, e:
-            self.log("Falsecolor Error: %s" % str(e), True)
+            self._log.error(str(e))
             self.error = str(e)
             traceback.print_exc(file=sys.stderr)
             if not self.DEBUG:
@@ -638,7 +651,7 @@ class FalsecolorImage(FalsecolorBase):
     
     def findAutoScale(self):
         """quick'n'dirty version for auto scale"""
-        self.log("findAutoScale()") 
+        self._log.debug("findAutoScale()") 
         cmd = "pextrem -o"
         extreme = self._popenPipeCmd(cmd, self._input+"\n")
         minx,miny,minr,ming,minb, maxx,maxy,maxr,maxg,maxb = extreme.split()
@@ -650,7 +663,7 @@ class FalsecolorImage(FalsecolorBase):
                     if scale > maxv:
                         self.scale = scale
                         self.legend.scale = scale
-                        self.log("    scale=%s" % self.formatNumber(self.scale))
+                        self._log.debug("    scale=%s" % self.formatNumber(self.scale))
                         return
 
         ## return to defaults if scale was not found 
@@ -693,11 +706,11 @@ class FalsecolorImage(FalsecolorBase):
         """
         get picture information from header lines
         """
-        self.log("analyzeImage()")
+        self._log.debug("analyzeImage()")
         parts = self._input.split("\n\n")
-        self.log("    image parts=%d" % len(parts))
+        self._log.debug("    image parts=%d" % len(parts))
         header = parts[0]
-        self.log("    image header=%d bytes" % len(header))
+        self._log.debug("    image header=%d bytes" % len(header))
         
         ## read image header
         for line in header.split("\n"):
@@ -710,14 +723,14 @@ class FalsecolorImage(FalsecolorBase):
                 self._irridiance = True
             elif line.startswith("rtrace") and "-i" in line.split():
                 self._irridiance = True
-        self.log("    image _irridiance=%s" % self._irridiance)
+        self._log.debug("    image _irridiance=%s" % self._irridiance)
 
         ## get resolution string
         data = parts[1]
-        self.log("    image data=%d bytes" % len(data))
+        self._log.debug("    image data=%d bytes" % len(data))
         y,YRES,x,XRES = data.split("\n")[0].split()
         self._resolution = (int(XRES),int(YRES))
-        self.log("    image resolution=(%s,%s)" % (XRES,YRES))
+        self._log.debug("    image resolution=(%s,%s)" % (XRES,YRES))
     
 
     def resetDefaults(self):
@@ -739,37 +752,60 @@ class FalsecolorImage(FalsecolorBase):
         self.legend.resetDefaults()
 
 
-    def setOptions(self,args):
+    def setOptions(self, args):
         """check command line args"""
-        if "-d" in args:
-            self.DEBUG = True
-            self.log("setOptions: %s" % str(args))
-
+       
+        ## if help is required show help and exit
 	if "-h" in args:
 	    self.showHelp()
 	    sys.exit(0)
 
+        ## check for debugging options first
+        if "-d" in args or "-df" in args:
+            self.DEBUG = True
+            self.legend.DEBUG = True
+            if "-d" in args:
+                h = logging.StreamHandler()
+                h.setLevel(logging.DEBUG)
+                f = logging.Formatter("%(name)s : %(levelname)-8s - %(message)s")
+                h.setFormatter(f)
+                self._log.addHandler(h)
+            if "-df" in args:
+                idx = args.index("-df") + 1
+                logfile = args[args.index("-df")+1]
+                if logfile.startswith("-"):
+                    print >>sys.stderr, "ERROR: log file name can't start with '-' (name='%s')" % logfile
+                    sys.exit(1)
+                h = logging.FileHandler(logfile)
+                h.setLevel(logging.DEBUG)
+                f = logging.Formatter("%(levelname)-8s in %(funcName)s : %(message)s")
+                h.setFormatter(f)
+                self._log.addHandler(h)
+            self._log.debug("begin setOptions() args=%s" % str(args))
+        
+        ## now loop over argument list
         try:
             while args:
                 if args[0] == '-lw':
                     option = args.pop(0)
-                    self.log("    -lw %s" % args[0])
                     self.legend.setLegendWidth(int(args[0]))
+                    self._log.debug("    -lw %s" % args[0])
                 elif args[0] == '-lh':
                     option = args.pop(0)
-                    self.log("    -lh %s" % args[0])
                     self.legend.setLegendHeight(int(args[0]))
+                    self._log.debug("    -lh %s" % args[0])
                 elif args[0] == '-lp':
                     option = args.pop(0)
-                    self.log("    -lp %s" % args[0])
                     if self.legend.setPosition(args[0]) != True:
                         self.error = "illegal argument for '-lp': '%s'" % args[0]
                         break
+                    self._log.debug("    -lp %s" % args[0])
 
                 elif args[0] == '-log':
                     option = args.pop(0)
                     self.decades = int(args[0])
                     self.legend.decades = int(args[0])
+                    self._log.debug("    -log %d" % int(args[0]))
                 elif args[0] == '-s':
                     option = args.pop(0)
                     if args[0].startswith("a") or args[0].startswith("A"):
@@ -784,10 +820,12 @@ class FalsecolorImage(FalsecolorBase):
                     if self.ndivs == 0:
                         self.error = "illegal argument for '-n': '%s'" % args[0]
                         break
+                    self._log.debug("    -n %d" % int(args[0]))
 
                 elif args[0] == '-l':
                     option = args.pop(0)
                     self.legend.label = args[0]
+                    self._log.debug("    -l %s" % args[0])
 
                 elif args[0] == '-spec':
 		    self.redv='old_red(vin(v))'
@@ -797,6 +835,7 @@ class FalsecolorImage(FalsecolorBase):
                 elif args[0] == '-mask':
                     option = args.pop(0)
                     self.mask = float(args[0])
+                    self._log.debug("    -l %.3f" % float(args[0]))
 
                 elif args[0] == '-r':
                     option = args.pop(0)
@@ -816,6 +855,8 @@ class FalsecolorImage(FalsecolorBase):
                     else:
                         self.error = "no such file: \"%s\"" % args[0]
                         break
+                    self._log.debug("    -i \"%s\"" % args[0])
+
                 elif args[0] == '-p':
                     option = args.pop(0)
                     if os.path.isfile(args[0]):
@@ -823,6 +864,8 @@ class FalsecolorImage(FalsecolorBase):
                     else:
                         self.error = "no such file: \"%s\"" % args[0]
                         break
+                    self._log.debug("    -p \"%s\"" % args[0])
+                
                 elif args[0] == '-ip' or args[0] == '-pi':
                     option = args.pop(0)
                     if os.path.isfile(args[0]):
@@ -831,16 +874,20 @@ class FalsecolorImage(FalsecolorBase):
                     else:
                         self.error = "no such file: \"%s\"" % args[0]
                         break
+                    self._log.debug("    -ip \"%s\"" % args[0])
 
                 ## contour line and band option
                 elif args[0] == '-cl':
                     self.docont = 'a'
+                    self._log.debug("    -cl [contour lines]")
                 elif args[0] == '-cb':
                     self.docont = 'b'
+                    self._log.debug("    -cb [contour bands]")
 
                 elif args[0] == '-m':
                     option = args.pop(0)
                     self.mult = float(args[0])
+                    self._log.debug("    -m %.2f" % float(args[0]))
                 
                 elif args[0] == '-t':
                     option = args.pop(0)
@@ -849,15 +896,18 @@ class FalsecolorImage(FalsecolorBase):
                 
                 elif args[0] == '-d':
                     self.DEBUG = True
-                    self.legend.DEBUG = True
+                elif args[0] == '-df':
+                    option = args.pop(0)
                 
                 elif args[0] == '-e':
                     self.doextrem = True
                     self.needfile = True
+                    self._log.debug("    -e [show extremes]")
                 
                 elif args[0] == '-z':
                     self.zerooff = 0.0
                     self.legend.zerooff = 0.0
+                    self._log.debug("    -z [legend starts with 0]")
 
                 else:
                     self.error = "bad option \"%s\"" % args[0]
@@ -866,13 +916,13 @@ class FalsecolorImage(FalsecolorBase):
 
         except ValueError, e:
             self.error = "bad value for option '%s': '%s'" % (option,args[0])
-            self.log("ERROR: %s" % self.error, True)
+            self._log.error(self.error)
 
         except IndexError, e:
             self.error = "missing argument for option '%s'" % option
-            self.log("ERROR: %s" % self.error, True)
+            self._log.error(self.error)
 
-        self.log("end of setOptions")
+        self._log.debug("end of setOptions()")
 
 
     def showExtremes(self):
@@ -924,9 +974,11 @@ class FalsecolorImage(FalsecolorBase):
         ("-spec", "", "use old style color scheme"),
         ("-mask", "MINV", "mask values below MINV with background colour (black)"),
         
-        ("-d", "", "print detailed progress messages"),	
-        ("-t", "TEMPDIR", "use TEMPDIR as temporary directory."),
-        ("-m", "MULTI", "set luminouse efficacy to MULTI; default is 179 Wh/m2."),
+        ("-d", "", "print detailed progress messages to STDERR"),	
+        ("-df","LOGFILE", "write detailed progress messages to LOGFILE"), 
+        
+        ("-t", "TEMPDIR", "use TEMPDIR as temporary directory"),
+        ("-m", "MULTI", "set luminouse efficacy to MULTI; default is 179 Wh/m2"),
         ("-r", "EXPR", "set mapping of red colour channel"),
         ("-g", "EXPR", "set mapping of green colour channel"),
         ("-b", "EXPR", "set mapping of blue colour channel")]
@@ -954,8 +1006,6 @@ class FalsecolorImage(FalsecolorBase):
             data = self.data
         cmd = "ra_ppm" 
         return self._popenPipeCmd(cmd, self.data)
-
-
 
 
 
