@@ -344,8 +344,8 @@ class FalsecolorOptionParser(FalsecolorBase):
             k = args.pop()
             if k == '-spec':
                 self._settings['redv'] = 'old_red(vin(v))'
-                self._settings['grnv'] = 'old_red(vin(v))'
-                self._settings['bluv'] = 'old_red(vin(v))'
+                self._settings['grnv'] = 'old_grn(vin(v))'
+                self._settings['bluv'] = 'old_blu(vin(v))'
             
             elif validators.has_key(k):
                 setting, validator, requires_arg = validators[k]
@@ -779,12 +779,10 @@ class FalsecolorImage(FalsecolorBase):
 
     def cleanup(self):
         """delete self.tmpdir - throws error on Windows (files still in use)"""
-        if self.tmpdir != "":
-            self._log.debug("keeping tmpdir '%s'" % self.tmpdir)
-            try:
-                shutil.rmtree(self.tmpdir)
-            except WindowsError, err:
-                self._log.warning("WindowsError: %s" % str(err))
+        try:
+            shutil.rmtree(self.tmpdir)
+        except WindowsError, err:
+            self._log.warning("WindowsError: %s" % str(err))
 
 
     def _createCalFiles(self):
@@ -827,11 +825,12 @@ class FalsecolorImage(FalsecolorBase):
             self.data = self._popenPipeCmd(combinecmd, self.data)
 
 
-    def doFalsecolor(self, keeptmp=False):
+    def doFalsecolor(self):
         """create part images, combine and store image data in self.data"""
         if self.error != "":
-            self._log.debug("falsecolor2 error: %s" % self.error)
+            self._log.error(self.error)
             return False 
+        
         try:
             if not self._input:
                 self.readImageData()
@@ -843,7 +842,8 @@ class FalsecolorImage(FalsecolorBase):
                 self._createLegend()
             if self.data and self.doextrem is True:
                 self.showExtremes()
-            
+            self.cleanup()
+
             if self.data and self.error == "":
                 return True
             else:
@@ -852,16 +852,19 @@ class FalsecolorImage(FalsecolorBase):
 
         except Exception, e:
             self._log.error(str(e))
+            self._log.exception(e)
             self.error = str(e)
-            traceback.print_exc(file=sys.stderr)
-        
-        finally:
-            if keeptmp == False:
-                self.cleanup()
+            self.cleanup()
+            return False
+            #traceback.print_exc(file=sys.stderr)
 
 
     def falsecolor(self, data=""):
         """convert image data to falsecolor image data"""
+        print >>sys.stderr, "self.redv='%s'" % str(self.redv)
+        print >>sys.stderr, "self.grnv='%s'" % str(self.grnv)
+        print >>sys.stderr, "self.bluv='%s'" % str(self.bluv)
+        
         if data == "":
             data = self._input
         self._createCalFiles()
@@ -1020,12 +1023,13 @@ class FalsecolorImage(FalsecolorBase):
         else:
             settings = self.parser.getSettings()
             for k,v in settings.items():
-                self._log.debug("    applying attribute '%s'" % k)
                 if k.startswith("_"):
                     pass
                 elif k.startswith('set'):
+                    self._log.debug("    calling %s(%s)" % (k,v))
                     getattr(self, k)(v)
                 elif self.__dict__.has_key(k):
+                    self._log.debug("    applying attribute '%s' (%s)" % (k,v))
                     self.__dict__[k] = v
                 else:
                     self._log.error("    unknown option '%s'" % k)
