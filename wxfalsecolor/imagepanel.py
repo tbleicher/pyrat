@@ -10,6 +10,8 @@ import traceback
 import wx
 from rgbeimage import RGBEImage, WX_IMAGE_FORMATS, WX_IMAGE_WILDCARD
 
+import wx.lib.scrolledpanel as scrolled
+
 
 class FileDropTarget(wx.FileDropTarget):
     """implement file drop feature for ImagePanel"""
@@ -31,11 +33,13 @@ class FileDropTarget(wx.FileDropTarget):
             self.wxapp.loadImage(path)
         
 
+#class ImagePanel(scrolled.ScrolledPanel):
 class ImagePanel(wx.Panel):
     """
     A panel to display the bitmap image data.
     """
     def __init__(self, parent, *args, **kwargs):
+        #scrolled.ScrolledPanel.__init__(self, parent,
         wx.Panel.__init__(self, parent,
                           style=wx.NO_FULL_REPAINT_ON_RESIZE,
                           *args, **kwargs)
@@ -61,6 +65,9 @@ class ImagePanel(wx.Panel):
         self._draggingFrame = (0,0)
 
         self.OnSize(None)
+        
+        #self.SetAutoLayout(1)
+        #self.SetupScrolling()
 
 
     def addLabel(self, x, y, dx=0, dy=0):
@@ -398,8 +405,8 @@ class ImagePanel(wx.Panel):
             
             ## use rounded scale values to reduce resizing of image
             if round(scale,1) != round(self._scale,1):
-                self._log.info("new scale: 1:%.1f" % scale)
                 self._scale = scale
+                self._log.info("new scale: 1:%.1f" % self._scale)
                 self.parent.statusbar.setZoom(self._scale)
                 if self._scale != 0:
                     if self._scale > 1:

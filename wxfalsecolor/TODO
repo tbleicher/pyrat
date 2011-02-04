@@ -4,6 +4,8 @@ KNOWN ISSUES
 
 * wxfalsecolor does not do background images (-p or -ip)
 
+* missing popup for cmd line errors
+
 
 FEATURES
 ========
@@ -23,4 +25,4 @@ wxfalsecolor:
 
 * update feature
 
-* handling of command line arguments like falsecolor2
+* remove duplicate code in command line parsing

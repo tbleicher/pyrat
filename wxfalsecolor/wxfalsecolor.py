@@ -108,18 +108,40 @@ class HeaderDialog(wx.Frame):
 
 
 class SplitStatusBar(wx.StatusBar):
-    """status bar with field to display zoom level"""
+    """status bar with embedded StaticText to display zoom level"""
 
     def __init__(self, parent):
         wx.StatusBar.__init__(self, parent, -1)
         self.SetFieldsCount(2)
         self.SetStatusWidths([-6,-1])
+        self.sizeChanged = False
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Bind(wx.EVT_IDLE, self.OnIdle)
+        
+        ## SetStatusText("", 1) caused exception "pure virutal method called"
+        ## workaround: show a StaticText on top of 2nd field
+        self._zoom = wx.StaticText(self, -1, "zoom 1:1", style=wx.ALIGN_RIGHT)
     
+    def OnIdle(self, evt):
+        if self.sizeChanged:
+            self.Reposition()
+
+    def OnSize(self, evt):
+        """cause recalculation of StaticText position"""
+        self.Reposition()
+        self.sizeChanged = True
+
+    def Reposition(self):
+        """reposition StaticText element (zoom)"""
+        rect = self.GetFieldRect(1)
+        self._zoom.SetPosition((rect.x, rect.y))
+        self._zoom.SetSize((rect.width-10, rect.height))
+        self.sizeChanged = False
+
     def setZoom(self, zoom):
-        if zoom == 0:
-            self.SetStatusText("", 1)
-        else:
-            self.SetStatusText("zoom 1:%.1f" % zoom, 1)
+        """update label of StaticText"""
+        s = "zoom 1:%.1f" % zoom
+        self._zoom.SetLabel(s)
 
 
 
