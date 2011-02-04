@@ -784,7 +784,7 @@ class FalsecolorImage(FalsecolorBase):
         try:
             shutil.rmtree(self.tmpdir)
         except WindowsError, err:
-            self._log.warning("WindowsError: %s" % str(err))
+            self._log.debug("WindowsError: %s" % str(err))
 
 
     def _createCalFiles(self):
