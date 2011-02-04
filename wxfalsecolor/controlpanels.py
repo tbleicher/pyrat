@@ -4,6 +4,7 @@
 ## $Id$
 ## $URL$
 
+import os
 import wx
 import wx.lib.foldpanelbar as fpb
 import wx.lib.buttons as buttons
@@ -80,6 +81,9 @@ class FalsecolorControlPanel(BaseControlPanel):
         self.legW = wx.TextCtrl(self, wx.ID_ANY, "100", size=(50,-1))
         self.legH = wx.TextCtrl(self, wx.ID_ANY, "200", size=(50,-1))
         
+        ## 'hidden' option for background image
+        self._background = ""
+
         ## 'falsecolor' button
         self.doFCButton = buttons.GenButton(self, wx.ID_ANY, label='falsecolor')
         self.doFCButton.Bind(wx.EVT_LEFT_DOWN, self.doFalsecolor)
@@ -174,6 +178,9 @@ class FalsecolorControlPanel(BaseControlPanel):
             args.append("-e")
         if self.fc_zero.GetValue():
             args.append("-z")
+        if self._background != "":
+            args.extend(["-p", self._background])
+            
         self._log.debug("getFCArgs(): args=%s" % str(args))
         return args        
 
@@ -204,6 +211,7 @@ class FalsecolorControlPanel(BaseControlPanel):
         self.legW.SetValue("100")
         self.legH.SetValue("200")
 
+        self._background = ""
         self._cmdLine = None
         
 
@@ -211,7 +219,7 @@ class FalsecolorControlPanel(BaseControlPanel):
         """set control values from command line args"""
         args.append("#")
         args.reverse()
-        ignore = ["-i", "-ip", "-p", "-df", "-t", "-r", "-g", "-b"]
+        ignore = ["-i", "-ip", "-df", "-t", "-r", "-g", "-b"]
 
         while args:
             arg = args.pop()
@@ -220,16 +228,19 @@ class FalsecolorControlPanel(BaseControlPanel):
                 pass
             elif arg == "-d":
                 pass
+            elif arg == "-v":
+                pass
             elif arg == "-m":
                 pass
             elif arg in ignore:
                 v = args.pop()
 
+            elif arg == "-p":
+                self._background = self.validatePath(args.pop())
             elif arg == "-cl":
                 self.fc_type.SetSelection(1)
             elif arg == "-cb":
                 self.fc_type.SetSelection(2)
-            
             elif arg == "-e":
                 self.fc_extr.SetValue(True)
             elif arg == "-l":
@@ -294,7 +305,12 @@ class FalsecolorControlPanel(BaseControlPanel):
             self.legH.SetValue("50")
 
 
-
+    def validatePath(self, path):
+        """return path if file exists, otherwise empty string"""
+        if os.path.isfile(path):
+            return path
+        else:
+            return ""
 
 
 class DisplayControlPanel(BaseControlPanel):

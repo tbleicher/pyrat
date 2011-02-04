@@ -285,7 +285,7 @@ class wxFalsecolorFrame(wx.Frame):
 
 
     def _getPathFromArgs(self, args):
-        """convert command line args to use with falsecolor2"""
+        """find input file argument in falsecolor command line"""
         ## -i <path> is added by loadFile, so remove path and option now
         path = ""
         for opt in ["-i", "-ip"]:
@@ -299,7 +299,12 @@ class wxFalsecolorFrame(wx.Frame):
                     if not os.path.isfile(path):
                         self._log.error("input file '%s' does not exist" % path)
                         path = ""
-                    del args[idx-1:idx+1]
+                    else:
+                        if opt == "-ip":
+                            self._log.info("replacing option '-ip' with '-p' for file '%s'" % path)
+                            args[idx-1] = "-p"
+                        else:
+                            del args[idx-1:idx+1]
         
         if path == "":
             ## check last argument is existing file (drag-n-drop and incorrect use)
@@ -463,8 +468,8 @@ class wxFalsecolorFrame(wx.Frame):
                 self.fccontrols.reset("Lux")
 
 
-    def _searchBinary(self,bname):
-        """try to find <bname> in search path"""
+    def _searchBinary(self, appname):
+        """try to find <appname> in search path"""
         paths = os.environ['PATH']
         extensions = ['']
         try:
@@ -472,7 +477,7 @@ class wxFalsecolorFrame(wx.Frame):
                 extensions = os.environ['PATHEXT'].split(os.pathsep)
             for path in paths.split(os.pathsep):
                 for ext in extensions:
-                    binpath = os.path.join(path,bname) + ext
+                    binpath = os.path.join(path,appname) + ext
                     if os.path.exists(binpath):
                         return binpath
         except Exception, err:
@@ -488,6 +493,9 @@ class wxFalsecolorFrame(wx.Frame):
         ## quick fix to remove '-h' option from cmd line
         if "-h" in args:
             del args[args.index('-h')]
+        if "-v" in args:
+            self._logHandler.setLevel(logging.INFO)
+            del args[args.index('-v')]
         if "-d" in args:
             self._logHandler.setLevel(logging.DEBUG)
             del args[args.index('-d')]
