@@ -480,6 +480,9 @@ class wxFalsecolorFrame(wx.Frame):
     
     def setDebug(self, args):
         """create and format console log handler"""
+        ## quick fix to remove '-h' option from cmd line
+        if "-h" in args:
+            del args[args.index('-h')]
         if "-d" in args:
             self._logHandler.setLevel(logging.DEBUG)
             del args[args.index('-d')]
