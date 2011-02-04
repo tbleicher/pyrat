@@ -8,7 +8,6 @@ import os
 import cStringIO
 import traceback
 import wx
-
 from rgbeimage import RGBEImage, WX_IMAGE_FORMATS, WX_IMAGE_WILDCARD
 
 
@@ -22,7 +21,7 @@ class FileDropTarget(wx.FileDropTarget):
         """validate image before passing it on to self.app.loadImage()"""
         path = filenames[0]
 	## create RGBEImage to check file type and data
-        rgbeImg = RGBEImage(self, ["-i", path])
+        rgbeImg = RGBEImage(self, self.wxapp._log, ["-i", path])
         rgbeImg.readImageData(path)
         if rgbeImg.error:
             msg = "Error loading image.\nFile: %s\nError: %s" % (path,rgbeImg.error)
@@ -51,6 +50,7 @@ class ImagePanel(wx.Panel):
         self.SetDropTarget(FileDropTarget(parent))
         
         self.parent = parent
+        self._log = parent._log
         self.rgbeImg = None
         self.img = None
         self._scale = 0
@@ -69,6 +69,7 @@ class ImagePanel(wx.Panel):
         if self.rgbeImg == False:
             return
 
+        self._log.debug("addLabel(x=%d, y=%d, dx=%d, dy=%d)" % (x,y,dx,dy))
         w,h = self._scaledImg.GetSize()
         if x > w or y > h:
             ## outside image area
@@ -94,6 +95,7 @@ class ImagePanel(wx.Panel):
             lum = (r*0.265+g*0.67+b*0.065)*179
             label = "%s" % self.parent.formatNumber(lum)
         
+        self._log.info("new label: '%s' at (x=%d,y=%d) (dx=%d, dy=%d)" % (label,x,y,dx,dy))
         self._labels.append((x,y, dx,dy, label))
 
 
@@ -101,6 +103,7 @@ class ImagePanel(wx.Panel):
         """move labels if legend offset has changed"""
         if self._labels == []:
             return
+        self._log.debug("adjustLabels(dx=%d, dy=%d)" % (dx,dy))
         for i in range(len(self._labels)):
             x,y,sx,sy,text = self._labels[i]
             self._labels[i] = (x+dx,y+dy,sx,sy,text)
@@ -108,6 +111,7 @@ class ImagePanel(wx.Panel):
     
     def clearLabels(self):
         """reset lables list"""
+        self._log.info("clearLabels()")
         self._labels = []
         self.UpdateDrawing()
 
@@ -116,11 +120,14 @@ class ImagePanel(wx.Panel):
         """convert rgbeimage to falsecolor and reload image"""
         xo,yo = self.rgbeImg.legendoffset
         self.rgbeImg.resetDefaults()
-        self.rgbeImg.setOptions(args)
-        
+
+        if self.rgbeImg.setOptions(args) == False:
+            self._log.warn("self.rgbeImg.setOptions() == False")
+            return False
         #self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
         if self.rgbeImg.doFalsecolor() == False:
             #self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
+            self._log.warn("self.rgbeImg.doFalsecolor() == False")
             return False
         else:
             #self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
@@ -135,6 +142,7 @@ class ImagePanel(wx.Panel):
         xo,yo = self.rgbeImg.legendoffset
         self.rgbeImg.resetDefaults()
         if self.rgbeImg.doPcond(args) == False:
+            self._log.warn("self.rgbeImg.doPcond() == False")
             return False
         else:
             xn,yn = self.rgbeImg.legendoffset
@@ -390,6 +398,7 @@ class ImagePanel(wx.Panel):
             
             ## use rounded scale values to reduce resizing of image
             if round(scale,1) != round(self._scale,1):
+                self._log.info("new scale: 1:%.1f" % scale)
                 self._scale = scale
                 self.parent.statusbar.setZoom(self._scale)
                 if self._scale != 0:
@@ -398,8 +407,9 @@ class ImagePanel(wx.Panel):
                     else:
                         self._scaledImg = self.img
                     self.SetSize(self._scaledImg.GetSize())
-                    self.Refresh()
-   
+  
+    def Refresh(self):
+        wx.Panel.Refresh(self)
 
     def saveBitmap(self, path=''):
         """save buffer image to file"""
@@ -409,6 +419,7 @@ class ImagePanel(wx.Panel):
         if path == '':
             return
 
+        self._log.info("saving bitmap to file '%s' ..." % path)
         ext = os.path.splitext(path)[1]
         ext = ext.lower()
         format = WX_IMAGE_FORMATS.get(ext, wx.BITMAP_TYPE_BMP)
@@ -424,21 +435,26 @@ class ImagePanel(wx.Panel):
             elif h > fh:
                 img = img.Size((w,fh), (0,0))
             img.SaveFile(path, format)
+            self._log.info("saved file '%s'" % path)
         except Exception, err:
             msg = "Error saving image:\n%s\n%s" % (str(err), traceback.format_exc())
+            self._log.error(msg)
             self.parent.showError(msg)
     
 
     def setImage(self, img):
         """set wx.Image"""
         self.img = img
+        self._scale = 0
         self.OnSize(None)
         ## call parent.Layout() to force resize of panel
         self.parent.Layout()
+        self.UpdateDrawing()
 
 
     def update(self, rgbeImg=None):
         """set new rgbeImg"""
+        self._log.info("updating image (rgbeImg=%s)" % rgbeImg)
         if rgbeImg:
             self.rgbeImg = rgbeImg
         try:
@@ -446,6 +462,7 @@ class ImagePanel(wx.Panel):
             io = cStringIO.StringIO(ppm)
             img = wx.ImageFromStream(io)
         except:
+            self._log.error("conversion to wx.Image failed")
             return False
         self.setImage(img)
         return True

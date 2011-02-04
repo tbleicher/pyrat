@@ -5,10 +5,6 @@
 ## $Id$
 ## $URL$
 
-import os
-import traceback
-import wx
-
 VERSION="0.42"
 LICENSE="""Copyright 2010 Thomas Bleicher. All rights reserved.
 
@@ -47,6 +43,7 @@ official policies, either expressed or implied, of Thomas Bleicher."""
 import sys,os
 import cStringIO
 import traceback
+import logging
 
 import wx
 from wx.lib.wordwrap import wordwrap
@@ -54,9 +51,6 @@ from wx.lib.wordwrap import wordwrap
 from rgbeimage import RGBEImage, WX_IMAGE_FORMATS, WX_IMAGE_WILDCARD
 from controlpanels import FoldableControlsPanel
 from imagepanel import ImagePanel
-
-
-DEBUG = 0
 
 
 
@@ -135,8 +129,12 @@ class wxFalsecolorFrame(wx.Frame):
         wx.Frame.__init__(self, None, title="wxFalsecolor - Radiance Picture Viewer")
 	#self.SetBackgroundColour("white")
         
+        self._log = self._initLog()
+        args = self.setDebug(args)
+        args = self.setDebugFile(args)
+
         ## menu
-        #self._addMenu()
+        #TODO: self._addMenu()
         ## image display
         self.imagepanel = ImagePanel(self)
         ## buttons
@@ -147,7 +145,6 @@ class wxFalsecolorFrame(wx.Frame):
         self.sizer.Add(panel, proportion=0, flag=wx.EXPAND)
         self.sizer.Add(self.imagepanel, proportion=1, flag=wx.EXPAND)
         self.SetSizer(self.sizer)
-        #self.statusbar = self.CreateStatusBar()
 
         self.statusbar = SplitStatusBar(self)
         self.SetStatusBar(self.statusbar)
@@ -162,7 +159,8 @@ class wxFalsecolorFrame(wx.Frame):
 
         self.Size = (800,600)
         
-        path,args = self._checkCmdArgs(args)
+        path,args = self._getPathFromArgs(args)
+
         if path != "":
             self.loadImage(path,args)
         self.Show()
@@ -194,32 +192,6 @@ class wxFalsecolorFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.onLoadImage, self.fileOpen)
 
 
-    def _checkCmdArgs(self, args):
-        """convert command line args to use with falsecolor2"""
-        ## -i <path> is added by loadFile, so remove path and option now
-        if "-i" in args or '-ip' in args:
-            try:
-                idx = args.index("-i")
-            except ValueError:
-                idx = args.index("-ip")
-            try:
-                path = args[idx+1]
-                if os.path.isfile(path):
-                    del args[idx:idx+2]
-                    return (path, args)
-            except IndexError:
-                del args[idx]
-                return ("", args)
-        ## path is last argument (drag-n-drop and incorrect use)
-        if len(args) > 0 and os.path.isfile(args[-1]):
-            if len(args) == 1 or args[-2] != '-p':
-                path = args.pop()
-                args = []
-                return (path,args)
-        ## if we can't find an input file, don't load stuff
-        return ("", args)
-
-
     def _doButtonLayout(self):
         """create buttons"""
         panel = wx.Panel(self, style=wx.RAISED_BORDER)
@@ -245,7 +217,9 @@ class wxFalsecolorFrame(wx.Frame):
 
     def doFalsecolor(self, args):
         """convert Radiance RGBE image to wx.Bitmap"""
-        if self.imagepanel.doFalsecolor(args) == True:
+        self._log.debug("doFalsecolor(%s)" % str(args))
+        if self.imagepanel.doFalsecolor(args[:]) == True:
+            self.fccontrols.setFromArgs(args[:]) 
             self.displaycontrols.reset()
             return True
         else:
@@ -261,6 +235,19 @@ class wxFalsecolorFrame(wx.Frame):
             return False
 
 
+    def exit(self, error=None):
+        """close logger and exit"""
+        if error:
+            self._log.error(str(error))
+        logging.shutdown()
+        self.Close()
+
+    
+    def expandControlPanel(self, idx):
+        """expand control panel with index idx"""
+        self._foldpanel.expand(idx)
+
+
     def formatNumber(self, n):
         """use FalsecolorImage formating for consistency"""
         if self.rgbeImg:
@@ -272,6 +259,36 @@ class wxFalsecolorFrame(wx.Frame):
     def getLableText(self):
         """return text of lable text box"""
         return self.lablecontrols.getLableText()
+
+
+    def _getPathFromArgs(self, args):
+        """convert command line args to use with falsecolor2"""
+        ## -i <path> is added by loadFile, so remove path and option now
+        path = ""
+        for opt in ["-i", "-ip"]:
+            if opt in args:
+                idx = args.index(opt) + 1
+                if idx == len(args):
+                    self._log.error("missing file argument for '%s' option" % opt)
+                    del args[idx-1]
+                else:
+                    path = args[idx]
+                    if not os.path.isfile(path):
+                        self._log.error("input file '%s' does not exist" % path)
+                        path = ""
+                    del args[idx-1:idx+1]
+        
+        if path == "":
+            ## check last argument is existing file (drag-n-drop and incorrect use)
+            if len(args) > 0 and os.path.isfile(args[-1]):
+                if len(args) == 1 or args[-2] != '-p':
+                    path = args.pop()
+                else:
+                    self._log.error("no input file on command line")
+        
+        self._log.info("input file '%s'" % path)
+        self._log.debug("remaining args: %s" % str(args))
+        return (path, args)
 
 
     def getRGBVAt(self, pos):
@@ -290,17 +307,34 @@ class wxFalsecolorFrame(wx.Frame):
             return (-1,-1,-1,-1)
 
 
+    def _initLog(self):
+        """set up log handler"""
+        logname = sys.argv[0]
+        self._logname = logname
+        log = logging.getLogger(logname)
+        log.setLevel(logging.DEBUG)
+
+        self._logHandler = logging.StreamHandler() #TODO: is this the right choice?
+        self._logHandler.setLevel(logging.WARNING)
+        format = logging.Formatter("[%(levelname)1.1s] %(name)s %(module)s : %(message)s")
+        self._logHandler.setFormatter(format)
+        log.addHandler(self._logHandler)
+        return log
+
+
     def loadImage(self, path, args=[]):
         """create instance of falsecolor image from <path>"""
+        self._log.debug("loadImage(%s)" % str(args))
+        orig_args=args[:]
         self.reset()
         self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-        fcargs = ["-s", "auto", "-i", path] + args
-        if DEBUG:
-            fcargs = ["-d"] + fcargs
-	self.rgbeImg = RGBEImage(self, fcargs)
+        
+        self.rgbeImg = RGBEImage(self, self._log, ["-i", path])
         self.rgbeImg.readImageData(path)
+        
         if self.rgbeImg.error:
             msg = "Error loading image:\n%s" % self.rgbeImg.error
+            self._log.error(msg)
             self.showError(msg)
             self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
         else:
@@ -315,7 +349,15 @@ class wxFalsecolorFrame(wx.Frame):
             self.saveButton.Enable()
             self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
 	    self._loadImageData()
-
+        
+        ## if there are falsecolor option left convert image
+        if len(orig_args) != 0: 
+            valid = self.rgbeImg.setOptions(orig_args[:])
+            fcargs = orig_args + ["-i", path]
+            if "-s" not in fcargs:
+                fcargs = ["-s", "auto"] + fcargs
+            self.doFalsecolor(fcargs)
+            
 
     def _loadImageData(self):
         """load image data of small images immediately"""
@@ -363,7 +405,7 @@ class wxFalsecolorFrame(wx.Frame):
 
     def onQuit(self, event):
         """hasta la vista"""
-        self.Close()
+        self.exit()
 
 
     def onSaveImage(self, event):
@@ -407,10 +449,42 @@ class wxFalsecolorFrame(wx.Frame):
                     if os.path.exists(binpath):
                         return binpath
         except Exception, err:
-            traceback.print_exc(file=sys.stderr) 
+            self._log.exception(err)
+            self._log.error(traceback.format_exc()) 
             return False
         ## if nothing was found return False
         return False
+
+    
+    def setDebug(self, args):
+        """create and format console log handler"""
+        if "-d" in args:
+            self._logHandler.setLevel(logging.DEBUG)
+            del args[args.index('-d')]
+        return args
+
+
+    def setDebugFile(self, args):
+        """create and format file log handler"""
+        if "-df" in args:
+            idx = args.index("-df") + 1
+            if idx == len(args):
+                self.exit("missing filename argument for option '-df'")
+            logfile = args[idx]
+            if logfile.startswith("-"):
+                self.exit("log file name can't start with '-' (name='%s')" % logfile)
+            self._setDebugFileHandler(logfile)
+            del args[idx-1:idx+1]
+        return args
+   
+
+    def _setDebugFileHandler(self, logfile):
+        """create and format file log handler"""
+        h = logging.FileHandler(logfile, mode='w')
+        h.setLevel(logging.DEBUG)
+        f = logging.Formatter("[%(levelname)1.1s] %(name)s %(module)s (%(funcName)s) : %(message)s")
+        h.setFormatter(f)
+        self._log.addHandler(h)
 
 
     def showAboutDialog(self):
@@ -465,16 +539,13 @@ class wxFalsecolorFrame(wx.Frame):
             self.statusbar.SetStatusText("'%s':   x,y=(%d,%d)   %s" % (self.filename, pos[0],pos[1], value))
 
 
-
-
-
 if __name__ == "__main__":   
     try:
         app = wx.App(redirect = False)
         frame = wxFalsecolorFrame(sys.argv[1:])
         app.MainLoop()
     except Exception, e:
-        traceback.print_exc()
-        print "\npress return to close window ..."
-        raw_input()
+        logging.exception(e)
+        logging.error(traceback.format_exc())
+        logging.shutdown()
 

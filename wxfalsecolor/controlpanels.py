@@ -16,6 +16,7 @@ class BaseControlPanel(wx.Panel):
         """save wxapp and call self.layout() to create buttons"""
         wx.Panel.__init__(self, parent, *args, **kwargs)
         self.wxapp = wxapp
+        self._log = wxapp._log
         self._cmdLine = None
         self.layout()
     
@@ -173,6 +174,7 @@ class FalsecolorControlPanel(BaseControlPanel):
             args.append("-e")
         if self.fc_zero.GetValue():
             args.append("-z")
+        self._log.debug("getFCArgs(): args=%s" % str(args))
         return args        
 
 
@@ -183,6 +185,7 @@ class FalsecolorControlPanel(BaseControlPanel):
 
     def reset(self, label="cd/m2"):
         """reset controls to initial values"""
+        self._log.debug("resetting falsecolor controls ...")
         self.enableFC("convert fc")
         self.label.SetValue(label)
         
@@ -203,6 +206,66 @@ class FalsecolorControlPanel(BaseControlPanel):
 
         self._cmdLine = None
         
+
+    def setFromArgs(self, args):
+        """set control values from command line args"""
+        args.append("#")
+        args.reverse()
+        ignore = ["-i", "-ip", "-p", "-df", "-t", "-r", "-g", "-b"]
+
+        while args:
+            arg = args.pop()
+            self._log.debug("setFromArgs() arg='%s'" % arg)
+            if arg == "#":
+                pass
+            elif arg == "-d":
+                pass
+            elif arg == "-m":
+                pass
+            elif arg in ignore:
+                v = args.pop()
+
+            elif arg == "-cl":
+                self.fc_type.SetSelection(1)
+            elif arg == "-cb":
+                self.fc_type.SetSelection(2)
+            
+            elif arg == "-e":
+                self.fc_extr.SetValue(True)
+            elif arg == "-l":
+                self.label.SetValue(args.pop())
+            elif arg == "-log":
+                self.fc_log.SetValue(True)
+                self.logv.SetValue(args.pop())
+            elif arg == "-lh":  
+                self.legH.SetValue(args.pop())
+            elif arg == "-lw":
+                self.legW.SetValue(args.pop())
+            elif arg == "-lp":
+                v = args.pop()
+                if v.startswith("-"):
+                    self.inside.SetValue(True)
+                    v = v[1:]
+                self.legpos.SetStringSelection(v)
+            elif arg == "-mask":
+                self.fc_mask.SetValue(True)
+                self.maskv.SetValue(args.pop()) 
+            elif arg == "-n":    
+                self.steps.SetValue(args.pop())
+            elif arg == "-s":    
+                self.scale.SetValue(args.pop())
+            elif arg == "-spec":
+                self.fc_col.SetValue(True)
+            elif arg == "-z":
+                self.fc_zero.SetValue(True)
+        
+        self._cmdLine = " ".join(self.getFCArgs())
+        
+        ## set button label
+        self.wxapp.expandControlPanel(1)
+        self.updateFCButton(None)
+        #self.doFCButton.Disable()
+
 
     def updateFCButton(self, event):
         """set label of falsecolor button to 'update'"""
@@ -327,6 +390,7 @@ class DisplayControlPanel(BaseControlPanel):
                 args.extend(["-u", "%d" % white, "-d", "%d" % range])
             except ValueError:
                 pass
+        self._log.debug("getPcondArgs() args=%s" % str(args))
         return args
 
 
@@ -402,7 +466,6 @@ class DisplayControlPanel(BaseControlPanel):
 
     def reset(self):
         """set buttons to initial state"""
-        
         self.acuity.SetValue(False)
         self.glare.SetValue(False)
         self.contrast.SetValue(False)
@@ -436,6 +499,7 @@ class LablesControlPanel(BaseControlPanel):
     def __init__(self, parent, wxapp, *args, **kwargs):
         wx.Panel.__init__(self, parent, *args, **kwargs)
         self.wxapp = wxapp
+        self._log = wxapp._log
         self._layout()
 
     def _layout(self):
@@ -571,7 +635,21 @@ class FoldableControlsPanel(wx.Panel):
         self.SetSize((140,350))
         self._layout()
         self.Bind(wx.EVT_SIZE, self.setBarSize)
-    
+
+
+    def expand(self, idx):
+        """expand element <idx> on self.pnl"""
+        if not self.pnl:
+            return False
+        total = self.pnl.GetCount()
+        if idx >= total:
+            return False
+        for i in range(total):
+            panel = self.pnl.GetFoldPanel(i)
+            self.pnl.Collapse(panel)
+        panel = self.pnl.GetFoldPanel(idx)
+        self.pnl.Expand(panel)
+
 
     def _layout(self, vertical=True):
                            

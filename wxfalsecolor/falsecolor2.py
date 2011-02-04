@@ -294,8 +294,6 @@ class FalsecolorOptionParser(FalsecolorBase):
 
     def parseOptions(self, args):
         """process command line options for FalsecolorImage"""
-        print >>sys.stderr, "parseOptions()", args
-        
         self._log.debug("start of Parser.parseOptions()")
         
         ## set up dict for validators
@@ -324,13 +322,17 @@ class FalsecolorOptionParser(FalsecolorBase):
             '-e'    : ('doextrem',          self._validateTrue,   False)}
 
         ## now loop over argument list
-        try:
-            self._validate(args, validators) 
-            if self.error:
-                return False
-        except IndexError, e:
-            self.error = "missing argument for option '%s'" % option
+        #try:
+        #except IndexError, e:
+        #    self.error = "missing argument for option '%s'" % option
+        #    self._log.error(self.error)
+        #    self._log.debug("end of Parser.parseOptions()")
+        #    return False
+        
+        self._validate(args, validators) 
+        if self.error:
             self._log.error(self.error)
+            self._log.debug("end of Parser.parseOptions()")
             return False
 
         self._log.debug("end of Parser.parseOptions()")
@@ -408,7 +410,7 @@ class FalsecolorOptionParser(FalsecolorBase):
         if os.path.isfile(v):
             return v
         else:
-            self.error = "no such file: \"%s\"" % args[0]
+            self.error = "no such file: \"%s\"" % v
             return False
 
     
@@ -851,20 +853,15 @@ class FalsecolorImage(FalsecolorBase):
                 return False
 
         except Exception, e:
-            self._log.error(str(e))
             self._log.exception(e)
+            self._log.error(traceback.format_exc())
             self.error = str(e)
             self.cleanup()
             return False
-            #traceback.print_exc(file=sys.stderr)
 
 
     def falsecolor(self, data=""):
         """convert image data to falsecolor image data"""
-        print >>sys.stderr, "self.redv='%s'" % str(self.redv)
-        print >>sys.stderr, "self.grnv='%s'" % str(self.grnv)
-        print >>sys.stderr, "self.bluv='%s'" % str(self.bluv)
-        
         if data == "":
             data = self._input
         self._createCalFiles()
@@ -978,8 +975,15 @@ class FalsecolorImage(FalsecolorBase):
         self.legend.decades = n
 
     def setScale(self, n):
-        self.scale = n
-        self.legend.scale = n
+        if n == "auto":
+            if self._input != '':
+                self.findAutoScale()
+            else:
+                self.scale = 1000
+                self.legend.scale = 1000
+        else:
+            self.scale = n
+            self.legend.scale = n
 
     def setIPPath(self, path):
         """set path to use as image and bg picture"""
@@ -1017,7 +1021,7 @@ class FalsecolorImage(FalsecolorBase):
     def setOptions(self, args):
         """use parser to validate command line"""
         if self.parser.parseOptions(args) != True:
-            self.error = parser.error
+            self.error = self.parser.error
             return False
 
         else:
@@ -1085,6 +1089,15 @@ class ConsoleInterface:
     def __init__(self, logname=""):
         self._log = self._initLog(logname)
 
+    def exit(self, error=None):
+        """close logger and exit"""
+        err = 0
+        if error:
+            self._log.error(str(error))
+            err = 1
+        logging.shutdown()
+        sys.exit(err)
+
     def _initLog(self, logname):
         """start new logger instance with class identifier"""
         if logname == "":
@@ -1121,14 +1134,6 @@ class ConsoleInterface:
             sys.stdout.write(fc_img.data)
         self.exit()
 
-    def exit(self, error=None):
-        """close logger and exit"""
-        logging.shutdown()
-        if not error:
-            sys.exit(0)
-        else:
-            print >>sys.stderr, "[E] %s : %s" % (self._logname, str(error))
-
     def setDebug(self, args):
         """create and format console log handler"""
         if "-d" in args:
@@ -1146,7 +1151,7 @@ class ConsoleInterface:
             if logfile.startswith("-"):
                 self.exit("log file name can't start with '-' (name='%s')" % logfile)
             self._setDebugFileHandler(logfile)
-            del args[idx:idx+2]
+            del args[idx-1:idx+1]
         return args
     
     def _setDebugFileHandler(self, logfile):

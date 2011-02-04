@@ -4,7 +4,7 @@
 ## $Id$
 ## $URL$
 
-import os,sys
+import os
 import array
 import cStringIO
 import traceback
@@ -26,18 +26,19 @@ WX_IMAGE_FORMATS = {".bmp":  wx.BITMAP_TYPE_BMP,
 class RGBEImage(FalsecolorImage):
     """extends FalsecolorImage with interactive methods"""
 
-    def __init__(self, wxparent, *args):
+    def __init__(self, wxparent, log, *args):
         self.wxparent = wxparent
         self._array = []
         self._hasArray = False
         self.legendoffset = (0,0)
         self.legendpos = "SW"
-        FalsecolorImage.__init__(self, *args)
+        FalsecolorImage.__init__(self, log, *args)
 
 
     def cancelLoading(self, dlg, wxparent):
         """set flag when loading process has been canceled"""
         dlg.Destroy()
+        self._log.info("loading of data canceled")
         wxparent.loadingCanceled = True
         self._array = []
         return
@@ -45,7 +46,8 @@ class RGBEImage(FalsecolorImage):
 
     def doFalsecolor(self, *args, **kwargs):
         """set legendoffset after falsecolor conversion"""
-        FalsecolorImage.doFalsecolor(self, *args, **kwargs)
+        if FalsecolorImage.doFalsecolor(self) != True:
+            self._log.error("FalsecolorImage.doFalsecolor() == False")
         if self.error:
             msg = "falsecolor2 error:\n%s" % self.error
             self.showError(msg)
@@ -60,6 +62,7 @@ class RGBEImage(FalsecolorImage):
 
     def doPcond(self, args):
         """condition image with pcond"""
+        self._log.debug("doPcond() args=%s" % str(args)) 
         if self.picture == "-":
             path = self._createTempFile()
         else:
@@ -147,6 +150,7 @@ class RGBEImage(FalsecolorImage):
 
     def readArrayDataBIN(self, wxparent):
         """read binary pixel data into array of (r,g,b,v) values"""
+        self._log.debug("readArrayDataBIN()")
         xres,yres = self.getImageResolution()
         keepGoing = True
         dlg = wx.ProgressDialog("reading pixel values ...",
@@ -242,6 +246,7 @@ class RGBEImage(FalsecolorImage):
 
     def saveToFile(self, path):
         """convert image and save to file <path>"""
+        self._log.info("saveToFile(path='%s')" % path)
         pathext = os.path.splitext(path)[1]
         pathext = pathext.lower()
         try:
@@ -261,6 +266,7 @@ class RGBEImage(FalsecolorImage):
 
         except Exception, err:
             self.error = traceback.format_exc()
+            self._log.info(self.error)
             return False
 
         
@@ -274,6 +280,7 @@ class RGBEImage(FalsecolorImage):
 
     def showError(self, msg):
         """display dialog with error message"""
+        self._log.error(msg)
         dlg = wx.MessageDialog(self.wxparent, message=msg, caption="Error", style=wx.OK|wx.ICON_ERROR)
         dlg.ShowModal()
         dlg.Destroy()
@@ -281,6 +288,7 @@ class RGBEImage(FalsecolorImage):
 
     def showWarning(self, msg):
         """display dialog with error message"""
+        self._log.warning(msg)
         dlg = wx.MessageDialog(self.wxparent, message=msg, caption="Warning", style=wx.YES_NO|wx.ICON_WARN)
         result == dlg.ShowModal()
         dlg.Destroy()
