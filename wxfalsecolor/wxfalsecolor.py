@@ -178,14 +178,15 @@ class wxFalsecolorFrame(wx.Frame):
         self.loadingCanceled = False
 
         self._ra2tiff = self._searchBinary("ra2tiff")
-
-        self.Size = (800,600)
         
+        ## show main window
+        self.Size = (800,600)
+        self.Show()
+        
+        ## load image after main window is displayed
         path,args = self._getPathFromArgs(args)
-
         if path != "":
             self.loadImage(path,args)
-        self.Show()
 
 
     def _addFileButtons(self, panel):
@@ -356,33 +357,32 @@ class wxFalsecolorFrame(wx.Frame):
         
         if self.rgbeImg.error:
             msg = "Error loading image:\n%s" % self.rgbeImg.error
-            self._log.error(msg)
             self.showError(msg)
-            self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
         else:
-            self.path = path
-            self.filename = os.path.split(path)[1]
-            self.imagepanel.update(self.rgbeImg)
-            self.displaycontrols.reset()
-            if self.rgbeImg.isIrridiance():
-                self.fccontrols.reset("Lux")
-            else:
-                self.fccontrols.reset()
+            self.setPath(path)
+            self.reset()
             self.saveButton.Enable()
-            self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
 	    self._loadImageData()
+        
+        self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
         
         ## if there are falsecolor option left convert image
         if len(orig_args) != 0: 
             valid = self.rgbeImg.setOptions(orig_args[:])
-            fcargs = orig_args + ["-i", path]
-            if "-s" not in fcargs:
-                fcargs = ["-s", "auto"] + fcargs
-            self.doFalsecolor(fcargs)
+            if valid == False:
+                dlg = wx.MessageDialog(self, message=self.rgbeImg.error, caption="Falsecolor Options Error", style=wx.OK|wx.ICON_ERROR)
+                dlg.ShowModal()
+                dlg.Destroy()
+            else:
+                fcargs = orig_args + ["-i", path]
+                if "-s" not in fcargs:
+                    fcargs = ["-s", "auto"] + fcargs
+                self.doFalsecolor(fcargs)
             
 
     def _loadImageData(self):
         """load image data of small images immediately"""
+        ## TODO: evaluate image data (exclude fc images)
         x,y = self.rgbeImg.getImageResolution()
         ## TODO: preference setting for max image size
         if x*y <= 1000000:
@@ -456,6 +456,11 @@ class wxFalsecolorFrame(wx.Frame):
         """reset array to inital (empty) values"""
         self.displaycontrols.reset()
         self.imagepanel.clearLabels()
+        self.fccontrols.reset()
+        if self.rgbeImg:
+            self.imagepanel.update(self.rgbeImg)
+            if self.rgbeImg.isIrridiance():
+                self.fccontrols.reset("Lux")
 
 
     def _searchBinary(self,bname):
@@ -512,6 +517,13 @@ class wxFalsecolorFrame(wx.Frame):
         self._log.addHandler(h)
 
 
+    def setPath(self, path):
+        """update frame with new image path"""
+        self.path = path
+        self.filename = os.path.split(path)[1]
+        self.SetTitle("wxFalsecolor - '%s'" % self.filename)
+
+
     def showAboutDialog(self):
         """show dialog with license etc"""
         info = wx.AboutDialogInfo()
@@ -528,6 +540,7 @@ class wxFalsecolorFrame(wx.Frame):
 
     def showError(self, msg):
         """show dialog with error message"""
+        self._log.error(" ".join(msg.split()))
         self.statusbar.SetStatusText(msg)
         dlg = wx.MessageDialog(self, message=msg, caption="Error", style=wx.OK|wx.ICON_ERROR)
         dlg.ShowModal()
@@ -562,6 +575,8 @@ class wxFalsecolorFrame(wx.Frame):
                 if v > 0 and self.rgbeImg.isIrridiance():
                     value = "%s  value=%s lux" % (value,self.formatNumber(v)) 
             self.statusbar.SetStatusText("'%s':   x,y=(%d,%d)   %s" % (self.filename, pos[0],pos[1], value))
+
+
 
 
 if __name__ == "__main__":   
