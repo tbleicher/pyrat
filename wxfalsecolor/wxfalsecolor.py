@@ -55,13 +55,13 @@ from imagepanel import ImagePanel
 
 
 class HeaderDialog(wx.Frame):
+    """frame to display Radiance image headers"""
 
     def __init__(self, parent, header1):
 
         wx.Frame.__init__(self, parent, wx.ID_ANY, "Image Header")
         sizer = wx.BoxSizer(wx.VERTICAL)
         
-
         scroll1, maxw, height = self.addTextWindow(header1)
         sizer.Add(scroll1, proportion=1, flag=wx.EXPAND|wx.ALL, border=10) 
 
@@ -146,6 +146,7 @@ class SplitStatusBar(wx.StatusBar):
 
 
 class wxFalsecolorFrame(wx.Frame):
+    """main wxfalsecolor application window"""
 
     def __init__(self, args=[]):
         wx.Frame.__init__(self, None, title="wxFalsecolor - Radiance Picture Viewer")
