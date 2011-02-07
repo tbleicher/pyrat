@@ -143,6 +143,7 @@ class FalsecolorControlPanel(BaseControlPanel):
 
     def enableFC(self, text=""):
         """enable and update doFCButton"""
+        self._log.debug("enableFC(): text='%s'" % text)
         self.doFCButton.Enable()
         if text != "":
             self.doFCButton.SetLabel(text)
@@ -220,7 +221,8 @@ class FalsecolorControlPanel(BaseControlPanel):
         args.append("#")
         args.reverse()
         ignore = ["-i", "-ip", "-df", "-t", "-r", "-g", "-b"]
-
+        set_cmdline = True
+        
         while args:
             arg = args.pop()
             self._log.debug("setFromArgs() arg='%s'" % arg)
@@ -232,6 +234,8 @@ class FalsecolorControlPanel(BaseControlPanel):
                 pass
             elif arg == "-m":
                 pass
+            elif arg == "-nofc":
+                set_cmdline = False
             elif arg in ignore:
                 v = args.pop()
 
@@ -270,15 +274,19 @@ class FalsecolorControlPanel(BaseControlPanel):
             elif arg == "-z":
                 self.fc_zero.SetValue(True)
         
-        self._cmdLine = " ".join(self.getFCArgs())
-        
+        if set_cmdline:
+            self._cmdLine = " ".join(self.getFCArgs())
+        else:
+            ## _cmdLine needs to be set for updateFCButton
+            self._cmdLine = ""
+
         ## set button label
         self.wxapp.expandControlPanel(1)
-        self.updateFCButton(None)
+        self.updateFCButton()
         #self.doFCButton.Disable()
 
 
-    def updateFCButton(self, event):
+    def updateFCButton(self, event=None):
         """set label of falsecolor button to 'update'"""
         if self._cmdLine == None:
             return 

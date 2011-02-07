@@ -278,6 +278,15 @@ class RGBEImage(FalsecolorImage):
         self._popenPipeCmd(cmd, self.data)
 
 
+    def setOptions(self, args):
+        """strip '-nofc' from cmd line args"""
+        if '-nofc' in args:
+            print "removing '-nofc'"
+            args = args[:]
+            del args[args.index('-nofc')]
+        FalsecolorImage.setOptions(self, args)
+
+
     def showError(self, msg):
         """display dialog with error message"""
         self._log.error(msg)
