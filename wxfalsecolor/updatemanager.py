@@ -25,8 +25,8 @@ class DummyLogger(object):
     def error(self, msg):
         print "E " + msg.strip()
 
-    def exception(self, msg):
-        print "X " + msg.strip()
+    def exception(self, exc):
+        print "X " + exc.args[0]()
 
 
 
@@ -87,7 +87,7 @@ class IncrementalDownloader(object):
             content_length = response.info().getheader('Content-Length').strip()
             self._content_length = int(content_length)
         except Exception, err:
-            self._log.error("error in urlopen: '%s'" % err.message)
+            self._log.exception(err)
             self.error = err
             return (None, -1)
         
@@ -391,11 +391,11 @@ class UpdateManager(object):
             return True
         except urllib2.HTTPError, err:
             self.error = str(err)
-            self._log.error("urlopen() failed: '%s' % self.error.message")
+            self._log.error("urlopen() failed: '%s'" % self.error.args[0])
             return False
         except urllib2.URLError, err:
             self.error = err.reason
-            self._log.error("urlopen() failed: '%s' % self.error.message")
+            self._log.error("urlopen() failed: '%s'" % self.error.args[0])
             return False
 
 
@@ -453,7 +453,7 @@ class UpdateManager(object):
         dlg.CenterOnScreen()
         val = dlg.ShowModal()
         if val == wx.ID_OK:
-            self._log.details("update accepted; showing file selector ...")
+            self._log.debug("update accepted; showing file selector ...")
             return self.showFileSelector(details)
         else:
             self._log.info("update skipped; no download")
@@ -462,7 +462,7 @@ class UpdateManager(object):
 
     def _showErrorDialog(self, title="Error during update!"):
         """show error message dialog"""
-        self._log.error("error message: '%s'" % self.error)
+        self._log.error("error message: '%s'" % " ".join(self.error.split()))
         dlg = wx.MessageDialog(self.parent,
             "error message:\n%s" % self.error,
             title, 
@@ -499,7 +499,9 @@ class UpdateManager(object):
     
     def _showInfoDialog(self, title="title line", info="info line"):
         """show info message dialog"""
-        self._log.info("%s - %s" % (title, info))
+        logmsg = "%s - %s" % (title, info)
+        logmsg = " ".join(logmsg.split())
+        self._log.info(logmsg)
         dlg = wx.MessageDialog(self.parent,
                 info,
                 title, 
@@ -540,7 +542,7 @@ class UpdateManager(object):
             return False
         
         else:
-            self.error = incr.error.message if incr.error else "Download failed."
+            self.error = incr.error.args[0] if incr.error else "Download failed."
             _showErrorDialog(self,
                     title="Download error!",
                     info="Download file could not be retrieved.\nPlease try again with debugging enabled to see more details.")
@@ -560,7 +562,7 @@ class UpdateManager(object):
             if self.parent:
                 self._showErrorDialog(self, "Error saving file!")
             else:
-                self._log.error("Error saving file! - '%s'" % self.error.message)
+                self._log.error("Error saving file! - '%s'" % self.error.args[0])
     
 
     def setDateFormat(self, format):
@@ -576,7 +578,7 @@ class UpdateManager(object):
             self.date = date
             return True
         except ValueError, err:
-            self._log.error("error setting date: '%s'" % err.message)
+            self._log.error("error setting date: '%s'" % err.args[0])
             return False
 
 
