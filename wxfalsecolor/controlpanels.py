@@ -605,30 +605,25 @@ class MiscControlPanel(wx.Panel):
         self._layout()
 
     def _layout(self):
+        """create buttons for various functions"""
         sizer = wx.BoxSizer(wx.VERTICAL)
         
-        showHeader = wx.Button(self, wx.ID_ANY, "show header")
-        showHeader.Bind(wx.EVT_BUTTON, self.OnShowHeader)
-        sizer.Add(showHeader, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
+        buttons = [("show header", self.wxapp.showHeaders,     20),
+                ("check update",   self.wxapp.checkForUpdate,  10), 
+                ("about",          self.wxapp.showAboutDialog, 5)]
         
-        spacer = wx.Panel(self, wx.ID_ANY, size=(-1,10))
-        sizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
-        
-        about = wx.Button(self, wx.ID_ANY, "about")
-        about.Bind(wx.EVT_BUTTON, self.OnAbout)
-        sizer.Add(about, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
-        
-        ## add spacer and set size
-        spacer = wx.Panel(self, wx.ID_ANY, size=(-1,5))
-        sizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
+        ## create buttons and spacers
+        for label, func, space in buttons:
+            button = wx.Button(self, wx.ID_ANY, label)
+            button.Bind(wx.EVT_BUTTON, func)
+            sizer.Add(button, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=5)
+            if space > 0:
+                spacer = wx.Panel(self, wx.ID_ANY, size=(-1,space))
+                sizer.Add(spacer, proportion=0, flag=wx.EXPAND|wx.ALL, border=0)
+
+        ## set sizer and finish
         self.SetSizer(sizer)
         self.SetInitialSize()
-
-    def OnAbout(self, event):
-        self.wxapp.showAboutDialog()
-
-    def OnShowHeader(self, event):
-        self.wxapp.showHeaders()
 
 
 

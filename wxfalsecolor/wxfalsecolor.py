@@ -51,6 +51,7 @@ from wx.lib.wordwrap import wordwrap
 from rgbeimage import RGBEImage, WX_IMAGE_FORMATS, WX_IMAGE_WILDCARD
 from controlpanels import FoldableControlsPanel
 from imagepanel import ImagePanel
+from updatemanager import UpdateManager
 
 
 
@@ -214,6 +215,19 @@ class wxFalsecolorFrame(wx.Frame):
         self.menubar.Append(self.file, '&File')
         self.fileOpen = self.file.Append(wx.ID_ANY, '&Open file')
         self.Bind(wx.EVT_MENU, self.onLoadImage, self.fileOpen)
+
+
+    def checkForUpdate(self, event=None):
+        """start UpdateManager to check google project page for update"""
+        RELEASE_DATE = "Thu Jan 12 12:29:20 2011"
+        UPDATE_URL = "http://code.google.com/p/pyrat/downloads/detail?name=wxfalsecolor.exe"
+        self._log.info("check for updates ...")
+        self._log.debug("-> version='%s'" % VERSION)
+        self._log.debug("-> date='%s'" % RELEASE_DATE)
+        self._log.debug("-> url='%s'" % UPDATE_URL)
+        um = UpdateManager(UPDATE_URL, logger=self._log)
+        um.setDate(RELEASE_DATE)
+        um.showDialog(self)
 
 
     def _doButtonLayout(self):
@@ -533,7 +547,7 @@ class wxFalsecolorFrame(wx.Frame):
         self.SetTitle("wxFalsecolor - '%s'" % self.filename)
 
 
-    def showAboutDialog(self):
+    def showAboutDialog(self, event=None):
         """show dialog with license etc"""
         info = wx.AboutDialogInfo()
         info.Name = "wxfalsecolor"
@@ -556,7 +570,7 @@ class wxFalsecolorFrame(wx.Frame):
         dlg.Destroy()
 
     
-    def showHeaders(self):
+    def showHeaders(self, event=None):
         """display image headers in popup dialog"""
         if not self.rgbeImg:
             return
