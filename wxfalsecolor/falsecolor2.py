@@ -731,7 +731,7 @@ class FalsecolorLegend(FalsecolorBase):
     def setSteps(self, n):
         """set new number of legend steps"""
         if n <= 0:
-            self._log.warn("wrong value for legend steps: %d" % d)
+            self._log.warning("wrong value for legend steps: %d" % d)
             return False
         else:
             self.steps = n
