@@ -5,7 +5,7 @@
 ## $Id$
 ## $URL$
 
-VERSION="0.5beta"
+VERSION=0.5
 LICENSE="""Copyright 2010 Thomas Bleicher. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -222,7 +222,7 @@ class wxFalsecolorFrame(wx.Frame):
         RELEASE_DATE = "Thu Jan 12 12:29:20 2011"
         UPDATE_URL = "http://code.google.com/p/pyrat/downloads/detail?name=wxfalsecolor.exe"
         self._log.info("check for updates ...")
-        self._log.debug("-> version='%s'" % VERSION)
+        self._log.debug("-> version='%.2f'" % VERSION)
         self._log.debug("-> date='%s'" % RELEASE_DATE)
         self._log.debug("-> url='%s'" % UPDATE_URL)
         um = UpdateManager(UPDATE_URL, logger=self._log)
@@ -551,7 +551,7 @@ class wxFalsecolorFrame(wx.Frame):
         """show dialog with license etc"""
         info = wx.AboutDialogInfo()
         info.Name = "wxfalsecolor"
-        info.Version = "v%s (rREV)" % VERSION  # placeholder for build script 
+        info.Version = "v%.2f (rREV)" % VERSION  # placeholder for build script 
         info.Copyright = "(c) 2010 Thomas Bleicher"
         info.Description = "cross-platform GUI frontend for falsecolor"
         info.WebSite = ("http://sites.google.com/site/tbleicher/radiance/wxfalsecolor", "wxfalsecolor home page")
