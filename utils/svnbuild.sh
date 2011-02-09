@@ -90,17 +90,27 @@ cleanup
 echo -e "\nchecking out ${progname} (revision=${revision})"
 svn co ${repopath} ${tempdir}
 
-## replace "REV" in file with revision number
+## replace "REV" in with revision number and update UPLOADED_DATE line
+date_now=`date "+s%"`;
+new_date=$((date_now+600));
+date_stamp=`date -r ${new_date} "RELEASE_DATE = \"+%a %b %d %H:%M:S %Y\""`
+echo "new RELEASE_DATE line: ${date_stamp}"
 if [[ ${HOME} == "/home/mobaxterm" ]]
 then
     echo "MOBAXTERM"
     echo "sed -i s/REV/${revision}/ ./${tempdir}/${progname}.py"
     sed -i s/REV/${revision}/  ./${tempdir}/${progname}.py
+    sed -i s/^RELEASE_DATE.*/${date_stamp}/  ./${tempdir}/${progname}.py
 else
     echo "sed -i '' s/REV/${revision}/ ./${tempdir}/${progname}.py"
     sed -i '' s/REV/${revision}/  ./${tempdir}/${progname}.py
+    sed -i '' s/^RELEASE_DATE.*/${date_stamp}/  ./${tempdir}/${progname}.py
 fi
-grep VERSION ./${tempdir}/${progname}.py
+
+## show use of VERSION and REV
+echo ""
+grep -A 1 VERSION ./${tempdir}/${progname}.py
+echo ""
 
 echo "python /drives/c/pyinstaller-1.4/Makespec.py --onefile --console --icon=${progname}.ico ${tempdir}/${progname}.py"
 python C:/pyinstaller-1.4/Makespec.py --onefile --console --icon=${progname}.ico ${tempdir}/${progname}.py

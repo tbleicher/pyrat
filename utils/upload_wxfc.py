@@ -3,6 +3,9 @@
 # Copyright 2006, 2007 Google Inc. All Rights Reserved.
 # Author: danderson@google.com (David Anderson)
 #
+# modified for code.google.com/p/pyrat by Thomas Bleicher, Feb 2011
+#
+#
 # Script for uploading files to a Google Code project.
 #
 # This is intended to be both a useful script for people who want to
@@ -48,6 +51,8 @@
 
 __author__ = 'danderson@google.com (David Anderson)'
 
+
+
 import httplib
 import os.path
 import optparse
@@ -85,12 +90,6 @@ def upload(file, project_name, user_name, password, summary, labels=None):
     form_fields = [('summary', summary)]
     if labels is not None:
         form_fields.extend([('label', l.strip()) for l in labels])
-        ## Realease Date: id=released_date, value=sec
-        ## Description: id=description, 
-        ##XXX add fields for upload date and description
-        form_fields.append(("release_date", "1297200000"))
-        form_fields.append(("description", "uploaded desciption text"))
-
 
     content_type, body = encode_upload_request(form_fields, file)
 

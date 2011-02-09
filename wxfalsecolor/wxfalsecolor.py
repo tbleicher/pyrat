@@ -6,6 +6,8 @@
 ## $URL$
 
 VERSION=0.5
+RELEASE_DATE = "Thu Jan 12 12:29:20 2011"
+
 LICENSE="""Copyright 2010 Thomas Bleicher. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -268,7 +270,6 @@ class wxFalsecolorFrame(wx.Frame):
 
     def checkForUpdate(self, event=None):
         """start UpdateManager to check google project page for update"""
-        RELEASE_DATE = "Thu Jan 12 12:29:20 2011"
         UPDATE_URL = "http://code.google.com/p/pyrat/downloads/detail?name=wxfalsecolor.exe"
         self._log.info("check for updates ...")
         self._log.debug("-> version='%.2f'" % VERSION)
