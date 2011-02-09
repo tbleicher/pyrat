@@ -1,0 +1,56 @@
+
+wxfalsecolor v0.5
+=================
+
+priority: HIGH
+
+All users should update to this version.
+
+
+major changes:
+
+This version fixes a bug which can lead to wrong spot values
+being displayed for falsecolor images.
+
+This version adds command line support. Falsecolor2 options
+and new debug options ('-v' and '-d') can now be given as
+command line arguments following the falsecolor2 argument
+convention.
+
+It also includes a new configuration file parser which will
+allow future versions to read configuration options set by
+the user. This version will create a configuration file in
+the user's %APPDATA% (Windows) or $HOME directory on the
+first startup.
+
+
+further changes:
+
+* fixed a problem with the status bar that caused an error
+  message to pop up on close
+
+* changed the start sequence so that the interface appears
+  now before data is loaded or a falsecolor conversion starts
+
+* new automatic and manual update checks  
+
+* logging is now done via the Python logging module
+
+
+
+wxfalsecolor v0.42
+==================
+
+This version fixes a bug which led to incorrect calculation
+of average values for scaled images.
+
+It is recommended for all users.
+
+Further changes:
+
+* more feedback while loading large images
+
+* display of image zoom level
+
+* display zooms in steps to reduce CPU load due to
+  image resizing calculations
