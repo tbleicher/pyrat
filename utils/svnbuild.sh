@@ -112,6 +112,7 @@ echo ""
 grep -A 1 VERSION ./${tempdir}/${progname}.py
 echo ""
 
+echo -e "\nbuilding application bundle ...\n"
 echo "python /drives/c/pyinstaller-1.4/Makespec.py --onefile --console --icon=${progname}.ico ${tempdir}/${progname}.py"
 python C:/pyinstaller-1.4/Makespec.py --onefile --console --icon=${progname}.ico ${tempdir}/${progname}.py
 echo "python /drives/c/pyinstaller-1.4/Build.py ${specfile}"
