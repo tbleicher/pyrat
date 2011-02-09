@@ -184,7 +184,11 @@ class FalsecolorBase:
 		if not os.path.isdir(self.tmpdir):
 		    os.mkdir(self.tmpdir)
             except OSError, err:
-                self._log.warning(str(err))
+                if os.name == 'nt':
+                    self._log.debug(str(err))
+                else:
+                    self._log.warning(str(err))
+
 	else:
 	    os.mkdir(self.tmpdir)
 

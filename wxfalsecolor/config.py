@@ -5,7 +5,7 @@ from updatemanager import DummyLogger
 
 BUILT_IN_CONFIG = {
 	"Update" : {
-	    "interval" : "30",
+	    "interval" : "7",
 	    }
 	}
 

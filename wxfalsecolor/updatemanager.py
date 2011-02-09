@@ -460,7 +460,7 @@ class UpdateManager(object):
             return False
         else:
             self._log.info("no update available")
-            self._showInfoDialog("No new updates available.", "Try again in a few weeks.")
+            self._showInfoDialogno update", "No new updates available.\n "Try again in a few weeks.")
             return True
 
 

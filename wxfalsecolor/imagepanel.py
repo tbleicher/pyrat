@@ -131,15 +131,15 @@ class ImagePanel(wx.Panel):
         if self.rgbeImg.setOptions(args) == False:
             self._log.warn("self.rgbeImg.setOptions() == False")
             return False
-        #self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
         if "-nofc" in args:
+        self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
             return True
         if self.rgbeImg.doFalsecolor() == False:
-            #self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
+            self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
             self._log.warn("self.rgbeImg.doFalsecolor() == False")
             return False
         else:
-            #self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
+            self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
             xn,yn = self.rgbeImg.legendoffset
             self.adjustLabels(xn-xo, yn-yo)
             self.update()

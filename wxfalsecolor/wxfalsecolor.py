@@ -158,8 +158,7 @@ class wxFalsecolorFrame(wx.Frame):
 
     def __init__(self, args=[]):
         wx.Frame.__init__(self, None, title="wxFalsecolor - Radiance Picture Viewer")
-        #self.SetBackgroundColour("white")
-        
+        #self.SetBackgroundColour(wx.WHITE)
         self._log = self._initLog()
         args = self.setDebug(args)
         args = self.setDebugFile(args)
@@ -361,12 +360,12 @@ class wxFalsecolorFrame(wx.Frame):
             if opt in args:
                 idx = args.index(opt) + 1
                 if idx == len(args):
-                    self._log.error("missing file argument for '%s' option" % opt)
+                    self.showError("missing file argument for '%s' option" % opt)
                     del args[idx-1]
                 else:
                     path = args[idx]
                     if not os.path.isfile(path):
-                        self._log.error("input file '%s' does not exist" % path)
+                        self.showError("input file '%s' does not exist" % path)
                         path = ""
                     else:
                         if opt == "-ip":
@@ -381,7 +380,7 @@ class wxFalsecolorFrame(wx.Frame):
                 if len(args) == 1 or args[-2] != '-p':
                     path = args.pop()
                 else:
-                    self._log.error("no input file on command line")
+                    self._log.debug("no input file on command line")
         
         self._log.info("input file '%s'" % path)
         self._log.debug("remaining args: %s" % str(args))
