@@ -308,7 +308,8 @@ class UpdateDetailsDialog(wx.Dialog):
         sizer = wx.BoxSizer(wx.VERTICAL)
         
         ## title
-        label = wx.StaticText(self, -1, "Download details for wxfalsecolor.exe")
+        label = wx.StaticText(self, -1
+		"Download available for %s" % details.get("filename", "wxfalsecolor.exe")e")
         font_big = wx.Font(16, wx.SWISS, wx.NORMAL, wx.BOLD)
         label.SetFont(font_big)
         sizer.Add(label, 0, wx.ALIGN_CENTRE|wx.ALL, 15)
@@ -594,5 +595,3 @@ class UpdateManager(object):
             self.getDownloadPage()
             self.parseText()
         return self._parser.isUpdate(self.date)
-
-
