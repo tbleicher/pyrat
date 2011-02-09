@@ -40,19 +40,20 @@ are those of the authors and should not be interpreted as representing
 official policies, either expressed or implied, of Thomas Bleicher."""
 
 
-import sys,os
+import os
+import sys
 import cStringIO
-import traceback
 import logging
+import traceback
 
 import wx
 from wx.lib.wordwrap import wordwrap
 
-from rgbeimage import RGBEImage, WX_IMAGE_FORMATS, WX_IMAGE_WILDCARD
+from config import WxfcConfig
 from controlpanels import FoldableControlsPanel
 from imagepanel import ImagePanel
+from rgbeimage import RGBEImage, WX_IMAGE_FORMATS, WX_IMAGE_WILDCARD
 from updatemanager import UpdateManager
-
 
 
 class HeaderDialog(wx.Frame):
@@ -156,6 +157,9 @@ class wxFalsecolorFrame(wx.Frame):
         self._log = self._initLog()
         args = self.setDebug(args)
         args = self.setDebugFile(args)
+        
+        ## config parser instance
+        self._config = WxfcConfig(logger=self._log)
 
         ## menu
         #TODO: self._addMenu()
@@ -277,6 +281,7 @@ class wxFalsecolorFrame(wx.Frame):
         """close logger and exit"""
         if error:
             self._log.error(str(error))
+        self._config.save_changes()
         logging.shutdown()
         self.Close()
 
