@@ -36,8 +36,11 @@ class TestDownloadParser:
 class TestUpdateManager:
 
     def __init__(self):
-        self.fileurl = "file://%s" % os.path.abspath(URL_TESTFILE)
-    
+        if os.name == 'nt'
+            self.fileurl = "file:///%s" % os.path.abspath(URL_TESTFILE)
+        else:
+            self.fileurl = "file://%s" % os.path.abspath(URL_TESTFILE)
+
     def test_same_day(self):
         um = UpdateManager(self.fileurl)
         um.setDate("Thu Jan 13 12:29:20 2011")
