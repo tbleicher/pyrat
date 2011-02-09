@@ -44,6 +44,7 @@ import os
 import sys
 import cStringIO
 import logging
+import time
 import traceback
 
 import wx
@@ -54,6 +55,9 @@ from controlpanels import FoldableControlsPanel
 from imagepanel import ImagePanel
 from rgbeimage import RGBEImage, WX_IMAGE_FORMATS, WX_IMAGE_WILDCARD
 from updatemanager import UpdateManager
+
+
+DATE_FORMAT = "%a %b %d %H:%M:%S %Y"
 
 
 class HeaderDialog(wx.Frame):
@@ -152,15 +156,15 @@ class wxFalsecolorFrame(wx.Frame):
 
     def __init__(self, args=[]):
         wx.Frame.__init__(self, None, title="wxFalsecolor - Radiance Picture Viewer")
-	#self.SetBackgroundColour("white")
+        #self.SetBackgroundColour("white")
         
         self._log = self._initLog()
         args = self.setDebug(args)
         args = self.setDebugFile(args)
-        
+
         ## config parser instance
         self._config = WxfcConfig(logger=self._log)
-
+        
         ## menu
         #TODO: self._addMenu()
         ## image display
@@ -193,6 +197,9 @@ class wxFalsecolorFrame(wx.Frame):
         path,args = self._getPathFromArgs(args)
         if path != "":
             self.loadImage(path,args)
+    
+        ## check updates
+        self.checkAutoUpdate()
 
 
     def _addFileButtons(self, panel):
@@ -221,6 +228,44 @@ class wxFalsecolorFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.onLoadImage, self.fileOpen)
 
 
+    def checkAutoUpdate(self):
+        """check config for update interval and start UpdateManager"""
+        ## get interval (in days) for automatic update check
+        interval = 0
+        if self._config.has_option("Update", "interval"):
+            interval = self._config.getint("Update", "interval")
+        if interval == 0:
+            ## 0 interval means: don't check for updates automatically
+            self._log.debug("automatic update checks disabled")
+            return
+        
+        ## get time of last update check
+        if self._config.has_option("Update", "last_check_date"):
+            last_string = self._config.get("Update", "last_check_date")
+        else:
+            self._log.debug("no time stamp for last update check found")
+            last_string = time.strftime(DATE_FORMAT)
+            self._config.set("Update", "last_check_date", last_string)
+
+        ## convert date stamp to seconds
+        try: 
+            last_check = time.mktime(time.strptime(last_string, DATE_FORMAT))
+        except ValueError, err:
+            self._log.error("error parsing last update check date ('%s'): '%s'" % 
+                (date_string, err.args[0]))
+            self._config.set("Update", "last_check_date", time.strftime(DATE_FORMAT))
+            return False
+        
+        ## check for updates if last update was too long ago
+        next_check = last_check + (interval*24*60*60)
+        if time.time() > next_check:
+            self._log.info("automatic update check (last check: %s)" % last_string)
+            self.checkForUpdate()
+        else:
+            days = (next_check-time.time()) / (24*60*60)
+            self._log.debug("next update in %d days" % days)
+        
+
     def checkForUpdate(self, event=None):
         """start UpdateManager to check google project page for update"""
         RELEASE_DATE = "Thu Jan 12 12:29:20 2011"
@@ -231,7 +276,10 @@ class wxFalsecolorFrame(wx.Frame):
         self._log.debug("-> url='%s'" % UPDATE_URL)
         um = UpdateManager(UPDATE_URL, logger=self._log)
         um.setDate(RELEASE_DATE)
-        um.showDialog(self)
+        if event or um.updateAvailable():
+            if um.showDialog(self) == True:
+                ## update was successful or skipped by user
+                self._config.set("Update", "last_check_date", time.strftime(DATE_FORMAT))
 
 
     def _doButtonLayout(self):
@@ -387,7 +435,7 @@ class wxFalsecolorFrame(wx.Frame):
             self.setPath(path)
             self.reset()
             self.saveButton.Enable()
-	    self._loadImageData()
+            self._loadImageData()
         
         self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
         

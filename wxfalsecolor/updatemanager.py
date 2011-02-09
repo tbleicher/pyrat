@@ -309,7 +309,7 @@ class UpdateDetailsDialog(wx.Dialog):
         
         ## title
         label = wx.StaticText(self, -1
-		"Download available for %s" % details.get("filename", "wxfalsecolor.exe")e")
+		"Update available for %s" % details.get("filename", "wxfalsecolor.exe")e")
         font_big = wx.Font(16, wx.SWISS, wx.NORMAL, wx.BOLD)
         label.SetFont(font_big)
         sizer.Add(label, 0, wx.ALIGN_CENTRE|wx.ALL, 15)
