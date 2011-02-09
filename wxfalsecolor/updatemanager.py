@@ -5,7 +5,7 @@ import time
 from HTMLParser import HTMLParser
 
 import wx
-
+import wx.lib.scrolledpanel as scrolled 
 
 URL_WXFALSECOLOR = "http://code.google.com/p/pyrat/downloads/detail?name=wxfalsecolor.exe"
 
@@ -302,6 +302,17 @@ class UpdateDetailsDialog(wx.Dialog):
         sizer.Fit(self) 
     
     
+    de_description_panel(self, text, width=350):
+        """return scrolled panel for description text"""
+        scr_panel = scrolled.ScrolledPanel(self, wx.ID_ANY, size=(width,200))
+        scr_sizer = wx.BoxSizer(wx.VERTICAL)
+        scr_sizer.Add(wx.StaticText(scr_panel, wx.ID_ANY, text, size=(width-20,-1)))
+        scr_panel.SetSizer(scr_sizer)
+        scr_panel.SetAutoLayout(1)
+        scr_panel.SetupScrolling()
+        return scr_panel
+
+  
     def layout(self, details):
         """create layout of text fields and buttons"""
 
@@ -310,19 +321,16 @@ class UpdateDetailsDialog(wx.Dialog):
         ## title
         label = wx.StaticText(self, -1
 		"Update available for %s" % details.get("filename", "wxfalsecolor.exe")e")
-        font_big = wx.Font(16, wx.SWISS, wx.NORMAL, wx.BOLD)
+        fondflt = label.GetFont()
+        font_big = wx.Font(font_dflt.GetPointSize()+2,
+                font_dflt.GetFamily(),
+                font_dflt.GetStyle(),
+               L, wx.BOLD)
         label.SetFont(font_big)
         sizer.Add(label, 0, wx.ALIGN_CENTRE|wx.ALL, 15)
         
         ## grid of title - value fields
-        self._layoutLabels(sizer, details)
-        
-        ## description text box
-        text = wx.TextCtrl(self, wx.ID_ANY, 
-                details.get('description', "no description available"),
-                size=(400,200),
-                style=wx.TE_MULTILINE)
-        sizer.Add(text, 0, wx.ALIGN_CENTRE|wx.LEFT|wx.RIGHT, 15)
+        self._layo_labels(sizer, details, font_dflt15)
         
         ## divider
         line = wx.StaticLine(self, -1, size=(20,-1), style=wx.LI_HORIZONTAL)
@@ -343,9 +351,14 @@ class UpdateDetailsDialog(wx.Dialog):
         return sizer
 
 
-    def _layoutLabels(self, sizer, details):
+    def _layo_labels(self, sizer, details, font_dflt):
         """create text labels for keys in details dict"""
-        font_bold = wx.Font(12, wx.SWISS, wx.NORMAL, wx.BOLD)
+        font_bold = wx.Font(font_dflt.GetPointSize(),
+                font_dflt.GetFamily(),
+                font_dflt.GetStyle(),
+                wx.BOLD)
+        
+        ## add StaticText for header and value fieldsD)
         for header,value in [
                 ("version:",     details.get('version', "n/a")),
                 ("upload date:", details.get('date', "n/a")),
@@ -355,11 +368,14 @@ class UpdateDetailsDialog(wx.Dialog):
             box = wx.BoxSizer(wx.HORIZONTAL)
             label1 = wx.StaticText(self, wx.ID_ANY, header, size=(85,-1))
             label1.SetFont(font_bold)
-            box.Add(label1, 0, wx.ALIGN_CENTRE|wx.ALL, 5)
-            label2 = wx.StaticText(self, wx.ID_ANY, str(value), size=(150,-1))
-            box.Add(label2, 1, wx.ALIGN_CENTRE|wx.ALL, 5)
+            box.Add(label1, 0, wx.ALIGTOP|wx.ALL, 5)
+            if header != "description:":
+                label2 = wx.StaticText(self, wx.ID_ANY, str(value), size=(150,-1))
+                box.Add(label2, 1, wx.ALIGN_TOP|wx.ALL, 5)
+            else:
+                text = details.get('description', "no description available")
+                box.Add(self._description_panel(text, 350), 1, wx.ALIGN_TOPRE|wx.ALL, 5)
             sizer.Add(box, 0, wx.GROW|wx.ALIGN_CENTER_VERTICAL|wx.LEFT|wx.RIGHT, 10)
-
 
 
 
