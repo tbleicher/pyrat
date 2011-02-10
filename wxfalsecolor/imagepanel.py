@@ -44,16 +44,8 @@ class ImagePanel(wx.Panel):
                           style=wx.NO_FULL_REPAINT_ON_RESIZE,
                           *args, **kwargs)
         
-        self.Bind(wx.EVT_SIZE, self.OnSize)
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
-        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
-        self.Bind(wx.EVT_ERASE_BACKGROUND, self.DoNothing)
-
-        self.SetDropTarget(FileDropTarget(parent))
-        
         self.parent = parent
+        self._background_color = wx.Colour(237,237,237) # Apple window bg
         self._log = parent._log
         self.rgbeImg = None
         self.img = None
@@ -64,10 +56,15 @@ class ImagePanel(wx.Panel):
         self._dragging = False
         self._draggingFrame = (0,0)
 
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
+        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_ERASE_BACKGROUND, self.DoNothing)
+
+        self.SetDropTarget(FileDropTarget(parent))
         self.OnSize(None)
-        
-        #self.SetAutoLayout(1)
-        #self.SetupScrolling()
 
 
     def addLabel(self, x, y, dx=0, dy=0):
@@ -173,7 +170,7 @@ class ImagePanel(wx.Panel):
             dc.DrawText("wx.GraphicsContext not supported", 25, 25)
             return
 
-        #self._drawBackground(gc)
+        self._drawBackground(gc)
         ## draw image
         if self._scaledImg:
             self._drawBMP(gc)
@@ -186,11 +183,11 @@ class ImagePanel(wx.Panel):
 
 
     def _drawBackground(self, gc):
-        """debug method: draw pink background to show image shape"""
+        """draw background to avoid black frame in Windows"""
         path_bg = gc.CreatePath()
         w,h = self.GetClientSizeTuple()
         path_bg.AddRectangle(0,0,w,h)
-        gc.SetBrush(wx.Brush("pink"))
+        gc.SetBrush(wx.Brush(self._background_color))
         gc.DrawPath(path_bg)
 
 
