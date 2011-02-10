@@ -15,6 +15,7 @@ import wx.lib.scrolledpanel as scrolled
 
 class FileDropTarget(wx.FileDropTarget):
     """implement file drop feature for ImagePanel"""
+    
     def __init__(self, app):
         wx.FileDropTarget.__init__(self)
         self.wxapp = app
@@ -31,15 +32,14 @@ class FileDropTarget(wx.FileDropTarget):
         else:
             ## now load for real
             self.wxapp.loadImage(path)
-        
+    
 
-#class ImagePanel(scrolled.ScrolledPanel):
+
+
 class ImagePanel(wx.Panel):
-    """
-    A panel to display the bitmap image data.
-    """
+    """A panel to display the bitmap image data."""
+
     def __init__(self, parent, *args, **kwargs):
-        #scrolled.ScrolledPanel.__init__(self, parent,
         wx.Panel.__init__(self, parent,
                           style=wx.NO_FULL_REPAINT_ON_RESIZE,
                           *args, **kwargs)
@@ -52,7 +52,6 @@ class ImagePanel(wx.Panel):
         self._scale = 0
         self._scaledImg = None
         self._labels = []
-        self.size = self.GetSize()
         self._dragging = False
         self._draggingFrame = (0,0)
 
@@ -392,30 +391,34 @@ class ImagePanel(wx.Panel):
 
     def resizeImage(self, size):
         """scale image to fit frame proportionally"""
-        self.size = size
+        if self._set_image_scale(size) == True:
+            self.parent.statusbar.setZoom(self._scale)
+            if self._scale != 0:
+                w,h = self.img.GetSize()
+                self._scaledImg = self.img.Scale( int(w/self._scale), int(h/self._scale) )
+        
+            
+    def _set_image_scale(self, size):
+        """set image scale to fit; return True if scale has changed"""
         if not self.img:
-            return
+            return False
         w,h = self.img.GetSize()
-        size = self.GetSize()
-        if w != 0 and size[0] != 0 and size[1] != 0:
+        if w*h*size[0]*size[1] != 0:
             scale_x = w / float(size[0])
             scale_y = h / float(size[1])
             scale   = max(scale_x,scale_y)
-            
             ## use rounded scale values to reduce resizing of image
-            if round(scale,1) != round(self._scale,1):
+            scale   = int(scale * 10.0) / 10.0
+            if w/scale > size[0] or h/scale > size[1]:
+                scale += 0.1
+            ## only make image smaller, not bigger
+            if scale < 1.0:
+                scale = 1.0
+            if scale != self._scale:
                 self._scale = scale
-                self._log.info("new scale: 1:%.1f" % self._scale)
-                self.parent.statusbar.setZoom(self._scale)
-                if self._scale != 0:
-                    if self._scale > 1:
-                        self._scaledImg = self.img.Scale( int(w/self._scale), int(h/self._scale) )
-                    else:
-                        self._scaledImg = self.img
-                    self.SetSize(self._scaledImg.GetSize())
-  
-    def Refresh(self):
-        wx.Panel.Refresh(self)
+                self._log.info("new scale: 1:%.2f" % self._scale)
+                return True
+                
 
     def saveBitmap(self, path=''):
         """save buffer image to file"""
@@ -456,6 +459,9 @@ class ImagePanel(wx.Panel):
         ## call parent.Layout() to force resize of panel
         self.parent.Layout()
         self.UpdateDrawing()
+
+
+
 
 
     def update(self, rgbeImg=None):
