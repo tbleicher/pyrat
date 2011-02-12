@@ -336,6 +336,7 @@ class FalsecolorOptionParser(FalsecolorBase):
         args.reverse()
         while args:
             k = args.pop()
+            
             if k == '-spec':
                 self._settings['redv'] = 'old_red(vin(v))'
                 self._settings['grnv'] = 'old_grn(vin(v))'
@@ -352,6 +353,12 @@ class FalsecolorOptionParser(FalsecolorBase):
                     break
                 self._settings[setting] = v
                 self._log.debug("    %s = %s" % (k,v))
+            
+            elif len(args) == 0 and self._validatePath("", k) != False:
+                ## last argument is a file
+                if self._settings.get("picture") == None:
+                    self._settings["picture"] = k
+            
             else:
                 self.error = "bad option: \'%s\'" % str(k)
                 break
