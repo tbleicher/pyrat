@@ -92,7 +92,7 @@ ba = bi(nfiles);
 
 def showHelp():
     """show usage message"""
-    options = [("-h", "", "print this help message to STDOUT\nBe careful with output redirection!"),
+    options = [("-h", "", "write this help message to STDOUT\nBe careful with output redirection!"),
 
     ("-i",  "IMG", "use IMG as input; the default is to read data from STDIN"), 
     ("-p",  "IMG", "use IMG as background image"), 
@@ -115,7 +115,7 @@ def showHelp():
     ("-spec", "", "use old style color scheme"),
     ("-mask", "MINV", "mask values below MINV with background colour (black)"),
     
-    ("-d", "", "print detailed progress messages to STDERR"),	
+    ("-d", "", "write detailed progress messages to STDERR"),	
     ("-df","LOGFILE", "write detailed progress messages to LOGFILE\nLOGFILE can not start with '-'"), 
     
     ("-t", "TEMPDIR", "use TEMPDIR as temporary directory"),
@@ -144,10 +144,10 @@ class NullHandler(logging.Handler):
 class FalsecolorBase:
     """base class for falsecolor"""
     
-    def __init__(self, log=None):
+    def __init__(self, logger=None):
         self.tmpdir = ""
-        if log:
-            self._log = log
+        if logger:
+            self._log = logger
         else:
             self._log = self._initLog()
 
@@ -277,9 +277,8 @@ class FalsecolorBase:
 
 class FalsecolorOptionParser(FalsecolorBase):
 
-    def __init__(self, log=None, args=[]):
-        FalsecolorBase.__init__(self, log)
-        self._settings = {}
+    def __init__(self, logger=None, args=[]):
+        FalsecolorBase.__init__(self, logger)
         self.error = ""
         self._settings = {}
         self._excluded_values = {'-log'  : [0],
@@ -321,18 +320,11 @@ class FalsecolorOptionParser(FalsecolorBase):
             '-cb'   : ('docont',            self._validateBool,   False),
             '-m'    : ('mult',              self._validateFloat,  True),
             '-t'    : ('setTmpdir',         self._validateTrue,   True),
-            '-d'    : ('_DEBUG',            self._validateTrue,   False),
-            '-df'   : ('_logfile',          self._validateTrue,   True),
-            '-e'    : ('doextrem',          self._validateTrue,   False)}
+            '-d'    : ('_DEBUG',            self._validateDebug,  False),
+            '-df'   : ('_logfile',          self._validateDebug,  True),
+            '-e'    : ('doextrem',          self._validateTrue,   False),
+            '-v'    : ('_VERBOSE',          self._validateDebug,  False)}
 
-        ## now loop over argument list
-        #try:
-        #except IndexError, e:
-        #    self.error = "missing argument for option '%s'" % option
-        #    self._log.error(self.error)
-        #    self._log.debug("end of Parser.parseOptions()")
-        #    return False
-        
         self._validate(args, validators) 
         if self.error:
             self._log.error(self.error)
@@ -365,12 +357,12 @@ class FalsecolorOptionParser(FalsecolorBase):
                 self._settings[setting] = v
                 self._log.debug("    %s = %s" % (k,v))
             else:
-                self.error = "bad option \'%s\'" % str(k)
+                self.error = "bad option: \'%s\'" % str(k)
                 break
 
-
+    
     def _validateBool(self, k, v):
-        """return 'a' or 'b' depending on value of k"""
+        """return option values for bool switches"""
         if k == '-cl':
             return 'a'
         elif k == '-cb':
@@ -380,6 +372,23 @@ class FalsecolorOptionParser(FalsecolorBase):
         else:
             self._log.warning("_validateCType used for unexpected key '%s'" % k)
             return v
+
+
+    def _validateDebug(self, k, v):
+        """set debug options"""
+        if k == '-d':
+            self.DEBUG = True
+            return True
+        elif k == '-df':
+            if v.startswith('-'):
+                self.error = "Debug file name can't start with '-'."
+                return False
+            else:
+                self._debug_file = v
+                return v
+        elif k == '-v':
+            self.VERBOSE = True
+            return True
 
 
     def _validateFloat(self, k, v):
@@ -1032,6 +1041,7 @@ class FalsecolorImage(FalsecolorBase):
             settings = self.parser.getSettings()
             for k,v in settings.items():
                 if k.startswith("_"):
+                    print >>sys.stderr, "TEST: key='%s' value='%s'" % (k,v)
                     pass
                 elif k.startswith('set'):
                     self._log.debug("    calling %s(%s)" % (k,v))
@@ -1088,10 +1098,11 @@ class FalsecolorImage(FalsecolorBase):
 
 
 
-class ConsoleInterface:
+class ConsoleInterface(object):
 
     def __init__(self, logname=""):
         self._log = self._initLog(logname)
+        self.setDebugLevel()
 
     def exit(self, error=None):
         """close logger and exit"""
@@ -1106,7 +1117,6 @@ class ConsoleInterface:
         """start new logger instance with class identifier"""
         if logname == "":
             logname = sys.argv[0]
-        self._logname = logname
         log = logging.getLogger(logname)
         log.setLevel(logging.DEBUG)
 
@@ -1123,11 +1133,8 @@ class ConsoleInterface:
             showHelp()
             self.exit()
         
-        args = self.setDebug(sys.argv[1:])
-        args = self.setDebugFile(args)
         fc_img = FalsecolorImage(self._log)
-
-        if fc_img.setOptions(args) == True:
+        if fc_img.setOptions(sys.argv[1:]) == True:
             fc_img.doFalsecolor()
         if fc_img.error:
             self.exit(fc_img.error)
@@ -1138,14 +1145,17 @@ class ConsoleInterface:
             sys.stdout.write(fc_img.data)
         self.exit()
 
-    def setDebug(self, args):
+    def setDebugLevel(self, args=sys.argv):
         """create and format console log handler"""
         if "-d" in args:
-            self._logHandler.setLevel(logging.WARNING)
-            del args[args.index('-d')]
-        return args
+            self._logHandler.setLevel(logging.DEBUG)
+            self._log.debug("set log level to DEBUG")
+        elif "-v" in args:
+            self._logHandler.setLevel(logging.INFO)
+            self._log.info("set log level to INFO")
+        self._setDebugFile()
 
-    def setDebugFile(self, args):
+    def _setDebugFile(self, args=sys.argv):
         """create and format file log handler"""
         if "-df" in args:
             idx = args.index("-df") + 1
@@ -1155,8 +1165,6 @@ class ConsoleInterface:
             if logfile.startswith("-"):
                 self.exit("log file name can't start with '-' (name='%s')" % logfile)
             self._setDebugFileHandler(logfile)
-            del args[idx-1:idx+1]
-        return args
     
     def _setDebugFileHandler(self, logfile):
         """create and format file log handler"""
