@@ -760,7 +760,6 @@ class FalsecolorImage(FalsecolorBase):
         """set defaults and parse command line args""" 
         FalsecolorBase.__init__(self, log)
         self.legend = FalsecolorLegend(self, self._log)
-        self.parser = FalsecolorOptionParser(self._log)
         self._input = ''
         self.picture = '-'
         self.cpict = ''
@@ -1032,25 +1031,29 @@ class FalsecolorImage(FalsecolorBase):
 
 
     def setOptions(self, args):
-        """use parser to validate command line"""
-        if self.parser.parseOptions(args) != True:
-            self.error = self.parser.error
+        """use options parser to check cmd line arguments"""
+        parser = FalsecolorOptionParser(self._log)
+        if parser.parseOptions(args) != True:
+            self.error = parser.error
             return False
-
         else:
-            settings = self.parser.getSettings()
-            for k,v in settings.items():
-                if k.startswith("_"):
-                    pass
-                elif k.startswith('set'):
-                    self._log.debug("    calling %s(%s)" % (k,v))
-                    getattr(self, k)(v)
-                elif self.__dict__.has_key(k):
-                    self._log.debug("    applying attribute '%s' (%s)" % (k,v))
-                    self.__dict__[k] = v
-                else:
-                    self._log.error("    unknown option '%s'" % k)
-            return True
+            return self.applySettings(parser.getSettings())
+
+    
+    def applySettings(self, settings):
+        """apply settings from OptionsParser to instance"""
+        for k,v in settings.items():
+            if k.startswith("_"):
+                pass
+            elif k.startswith('set'):
+                self._log.debug("    calling %s(%s)" % (k,v))
+                getattr(self, k)(v)
+            elif self.__dict__.has_key(k):
+                self._log.debug("    applying attribute '%s' (%s)" % (k,v))
+                self.__dict__[k] = v
+            else:
+                self._log.error("    unknown option '%s'" % k)
+        return True
 
 
     def showExtremes(self):
@@ -1165,7 +1168,7 @@ class ConsoleInterface(InterfaceBase):
             showHelp()
             self.exit()
         
-        ## now check arguments and create image class 
+        ## create falsecolor image
         fc_img = FalsecolorImage(self._log)
         if fc_img.setOptions(sys.argv[1:]) == True:
             fc_img.doFalsecolor()
