@@ -287,20 +287,8 @@ class FalsecolorOptionParser(FalsecolorBase):
                                  '-s'    : [0],
                                  '-mask' : [0]}
         
-        if len(args) != 0:
-            self.parseOptions(args)
-
-
-    def getSettings(self):
-        return self._settings
-
-
-    def parseOptions(self, args):
-        """process command line options for FalsecolorImage"""
-        self._log.debug("start of Parser.parseOptions()")
-        
         ## set up dict for validators
-        validators = {
+        self.validators = {
             '-lw'   : ('setLegendWidth',    self._validateInt,    True),
             '-lh'   : ('setLegendHeight',   self._validateInt,    True),
             '-z'    : ('setLegendOffset',   self._validateBool,   False),
@@ -325,17 +313,25 @@ class FalsecolorOptionParser(FalsecolorBase):
             '-e'    : ('doextrem',          self._validateTrue,   False),
             '-v'    : ('_VERBOSE',          self._validateDebug,  False)}
 
-        self._validate(args, validators) 
+        if len(args) != 0:
+            self.parseOptions(args)
+
+
+    def getSettings(self):
+        return self._settings
+
+
+    def parseOptions(self, args):
+        """process command line options for FalsecolorImage"""
+        self._log.debug("validating options ...")
+        self._validate(args) 
         if self.error:
             self._log.error(self.error)
-            self._log.debug("end of Parser.parseOptions()")
             return False
-
-        self._log.debug("end of Parser.parseOptions()")
         return True
  
         
-    def _validate(self, args, validators):
+    def _validate(self, args):
         """test options and option values; set self.error on error"""
         args.reverse()
         while args:
@@ -345,8 +341,8 @@ class FalsecolorOptionParser(FalsecolorBase):
                 self._settings['grnv'] = 'old_grn(vin(v))'
                 self._settings['bluv'] = 'old_blu(vin(v))'
             
-            elif validators.has_key(k):
-                setting, validator, requires_arg = validators[k]
+            elif self.validators.has_key(k):
+                setting, validator, requires_arg = self.validators[k]
                 if requires_arg == True:
                     v = args.pop()
                 else:
