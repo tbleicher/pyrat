@@ -1041,7 +1041,6 @@ class FalsecolorImage(FalsecolorBase):
             settings = self.parser.getSettings()
             for k,v in settings.items():
                 if k.startswith("_"):
-                    print >>sys.stderr, "TEST: key='%s' value='%s'" % (k,v)
                     pass
                 elif k.startswith('set'):
                     self._log.debug("    calling %s(%s)" % (k,v))
@@ -1078,8 +1077,6 @@ class FalsecolorImage(FalsecolorBase):
         self.data = self._popenPipeCmd(cmd, self.data)
 
 
-
-
     def toBMP(self, data=''):
         """convert image data to BMP image format"""
         if data == '':
@@ -1098,18 +1095,16 @@ class FalsecolorImage(FalsecolorBase):
 
 
 
-class ConsoleInterface(object):
+class InterfaceBase(object):
 
     def __init__(self, logname=""):
+        if not logname:
+            logname = self.__class__.__name__
         self._log = self._initLog(logname)
         self.setDebugLevel()
 
-    def exit(self, error=None):
-        """close logger and exit"""
-        err = 0
-        if error:
-            self._log.error(str(error))
-            err = 1
+    def exit(self):
+        """finalise log and exit"""
         logging.shutdown()
         sys.exit(err)
 
@@ -1126,25 +1121,7 @@ class ConsoleInterface(object):
         self._logHandler.setFormatter(format)
         log.addHandler(self._logHandler)
         return log
-
-    def main(self):
-        """check help and debug options and create fc image"""
-        if "-h" in sys.argv[1:]:
-            showHelp()
-            self.exit()
-        
-        fc_img = FalsecolorImage(self._log)
-        if fc_img.setOptions(sys.argv[1:]) == True:
-            fc_img.doFalsecolor()
-        if fc_img.error:
-            self.exit(fc_img.error)
-        else:
-            if os.name == 'nt':
-                import msvcrt
-                msvcrt.setmode(1,os.O_BINARY)
-            sys.stdout.write(fc_img.data)
-        self.exit()
-
+    
     def setDebugLevel(self, args=sys.argv):
         """create and format console log handler"""
         if "-d" in args:
@@ -1173,6 +1150,42 @@ class ConsoleInterface(object):
         f = logging.Formatter("%(levelname)5.5s in %(name)s (%(funcName)s) : %(message)s")
         h.setFormatter(f)
         self._log.addHandler(h)
+
+
+    
+
+
+
+class ConsoleInterface(InterfaceBase):
+    """command line inteface for falsecolor2"""
+
+    def main(self):
+        """check help and debug options and create fc image"""
+        if "-h" in sys.argv[1:]:
+            showHelp()
+            self.exit()
+        
+        ## now check arguments and create image class 
+        fc_img = FalsecolorImage(self._log)
+        if fc_img.setOptions(sys.argv[1:]) == True:
+            fc_img.doFalsecolor()
+        if fc_img.error:
+            self.exit(fc_img.error)
+        else:
+            if os.name == 'nt':
+                import msvcrt
+                msvcrt.setmode(1,os.O_BINARY)
+            sys.stdout.write(fc_img.data)
+        self.exit()
+
+    def exit(self, error=None):
+        """close logger and exit"""
+        err = 0
+        if error:
+            self._log.error(str(error))
+            err = 1
+        logging.shutdown()
+        sys.exit(err)
 
 
 
