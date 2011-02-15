@@ -114,15 +114,16 @@ def showHelp():
     ("-z", "", "create legend with values starting at zero"),
     ("-spec", "", "use old style color scheme"),
     ("-mask", "MINV", "mask values below MINV with background colour (black)"),
-    
-    ("-d", "", "write detailed progress messages to STDERR"),	
-    ("-df","LOGFILE", "write detailed progress messages to LOGFILE\nLOGFILE can not start with '-'"), 
-    
-    ("-t", "TEMPDIR", "use TEMPDIR as temporary directory"),
     ("-m", "MULTI", "set luminouse efficacy to MULTI; default is 179 Wh/m2"),
+    
     ("-r", "EXPR", "set mapping of red colour channel"),
     ("-g", "EXPR", "set mapping of green colour channel"),
-    ("-b", "EXPR", "set mapping of blue colour channel")]
+    ("-b", "EXPR", "set mapping of blue colour channel"),
+    
+    ("-v", "", "write more progress messages to STDERR"),	
+    ("-d", "", "write detailed progress messages to STDERR"),	
+    ("-df","LOGFILE", "write detailed progress messages to LOGFILE\nLOGFILE can not start with '-'"), 
+    ("-t", "TEMPDIR", "use TEMPDIR as temporary directory")]
 
     indent = "    " 
     sys.stdout.write("\nABOUT:\n")
@@ -323,7 +324,7 @@ class FalsecolorOptionParser(FalsecolorBase):
 
     def parseOptions(self, args):
         """process command line options for FalsecolorImage"""
-        self._log.debug("validating options ...")
+        self._log.debug("validating options (opts=%s) ..." % str(args))
         self._validate(args) 
         if self.error:
             self._log.error(self.error)
@@ -344,7 +345,10 @@ class FalsecolorOptionParser(FalsecolorBase):
             
             elif self.validators.has_key(k):
                 setting, validator, requires_arg = self.validators[k]
-                if requires_arg == True:
+                if requires_arg == True and len(args) == 0:
+                    self.error = "missing argument for option '%s'" % k
+                    break
+                elif requires_arg == True:
                     v = args.pop()
                 else:
                     v = True
@@ -399,10 +403,10 @@ class FalsecolorOptionParser(FalsecolorBase):
         try:
             f = float(v)
         except ValueError:
-            self.error = "wrong value for option %s: '%s'" % [k,v]
+            self.error = "wrong value for option %s: '%s'" % (k,v)
             return False
         if f in self._excluded_values.get(k, []):
-            self.error = "illegal value for option %s: %.3f" % [k,f]
+            self.error = "illegal value for option %s: %.3f" % (k,f)
         else:
             return f
     
@@ -412,10 +416,10 @@ class FalsecolorOptionParser(FalsecolorBase):
         try:
             i = int(v)
         except ValueError:
-            self.error = "wrong value for option %s: '%s'" % [k,v]
+            self.error = "wrong value for option %s: '%s'" % (k,v)
             return False
         if i in self._excluded_values.get(k, []):
-            self.error = "illegal value for option %s: %d" % [k,i]
+            self.error = "illegal value for option %s: %d" % (k,i)
             return False
         else:
             return i
@@ -440,7 +444,7 @@ class FalsecolorOptionParser(FalsecolorBase):
         if v in 'WS W WN NW N NE EN E ES SE S SW'.split():
             return within + v
         else:
-            self.error = "wrong option for '%s': '%s'" % [k,v]
+            self.error = "wrong option for '%s': '%s'" % (k,v)
     
 
     def _validateScale(self, k, v):
