@@ -29,6 +29,21 @@ class WxfcConfig(SafeConfigParser):
 	self._changed = False
 
 
+    def get(self, section, option, default=None):
+        """add default value to return if not found in config"""
+        if default and not self.has_option(section, option):
+            if not self.has_section(section):
+                self.add_section(section)
+            self.set(section, option, str(default))
+        return SafeConfigParser.get(self, section, option)
+
+    def getfloat(self, section, option, default=None):
+        return float(self.get(section, option, default))
+
+    def getint(self, section, option, default=None):
+        return int(self.get(section, option, default))
+
+
     def get_filepath(self):
 	"""return path to config file in $APPDATA or $HOME"""
 	if os.name == 'nt':
