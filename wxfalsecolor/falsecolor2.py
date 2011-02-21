@@ -337,8 +337,9 @@ class FalsecolorOptionParser(FalsecolorBase):
         args.reverse()
         while args:
             k = args.pop()
-            
-            if k == '-spec':
+            if k == None:
+                pass
+            elif k == '-spec':
                 self._settings['redv'] = 'old_red(vin(v))'
                 self._settings['grnv'] = 'old_grn(vin(v))'
                 self._settings['bluv'] = 'old_blu(vin(v))'

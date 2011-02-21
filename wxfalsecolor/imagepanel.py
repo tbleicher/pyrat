@@ -127,8 +127,6 @@ class ImagePanel(wx.Panel):
         if self.rgbeImg.setOptions(args) == False:
             self._log.warn("self.rgbeImg.setOptions() == False")
             return False
-        if "-nofc" in args:
-            return True
         self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
         if self.rgbeImg.doFalsecolor() == False:
             self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))

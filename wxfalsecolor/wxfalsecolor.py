@@ -54,6 +54,7 @@ from wx.lib.wordwrap import wordwrap
 
 from config import WxfcConfig
 from controlpanels import FoldableControlsPanel
+from falsecolor2 import FalsecolorOptionParser, InterfaceBase
 from imagepanel import ImagePanel
 from rgbeimage import RGBEImage, WX_IMAGE_FORMATS, WX_IMAGE_WILDCARD
 from updatemanager import UpdateManager
@@ -122,29 +123,30 @@ class SplitStatusBar(wx.StatusBar):
         wx.StatusBar.__init__(self, parent, -1)
         self.SetFieldsCount(2)
         self.SetStatusWidths([-6,-1])
-        self.sizeChanged = False
+        self._size_changed = False
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_IDLE, self.OnIdle)
         
-        ## SetStatusText("", 1) caused exception "pure virutal method called"
+        ## self.SetStatusText("", 1) caused exception "pure virutal method called"
         ## workaround: show a StaticText on top of 2nd field
         self._zoom = wx.StaticText(self, -1, "zoom 1:1", style=wx.ALIGN_RIGHT)
     
     def OnIdle(self, evt):
-        if self.sizeChanged:
-            self.Reposition()
+        """reposition if necessary"""
+        if self._size_changed:
+            self.reposition()
 
     def OnSize(self, evt):
         """cause recalculation of StaticText position"""
-        self.Reposition()
-        self.sizeChanged = True
+        self.reposition()
+        self._size_changed = True
 
-    def Reposition(self):
+    def reposition(self):
         """reposition StaticText element (zoom)"""
         rect = self.GetFieldRect(1)
         self._zoom.SetPosition((rect.x, rect.y))
         self._zoom.SetSize((rect.width-10, rect.height))
-        self.sizeChanged = False
+        self._size_changed = False
 
     def setZoom(self, zoom):
         """update label of StaticText"""
@@ -153,83 +155,33 @@ class SplitStatusBar(wx.StatusBar):
 
 
 
-class wxFalsecolorFrame(wx.Frame):
-    """main wxfalsecolor application window"""
+class WxfcApp(wx.App, InterfaceBase):
 
-    def __init__(self, args=[]):
-        wx.Frame.__init__(self, None, title="wxFalsecolor - Radiance Picture Viewer")
-        #self.SetBackgroundColour(wx.WHITE)
-        self._log = self._initLog()
-        args = self.setDebug(args)
-        args = self.setDebugFile(args)
-
-        ## config parser instance
+    def __init__(self, *args, **kwargs):
+        """set up logger and config before wx.App"""
+        self._log = self._initLog(sys.argv[0])
+        self.setDebugLevel()
         self._config = WxfcConfig(logger=self._log)
+        wx.App.__init__(self, *args, **kwargs)
         
-        ## menu
-        #TODO: self._addMenu()
-        ## image display
-        self.imagepanel = ImagePanel(self)
-        ## buttons
-        panel = self._doButtonLayout()
 
-        ## image - buttons layout
-        self.sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.sizer.Add(panel, proportion=0, flag=wx.EXPAND)
-        self.sizer.Add(self.imagepanel, proportion=1, flag=wx.EXPAND)
-        self.SetSizer(self.sizer)
+    def OnInit(self):
+        """create and show main window"""
+        self.main = WxfcFrame(None, self, logger=self._log, config=self._config)
+        self.main.Show()
+        self.SetTopWindow(self.main)
+        wx.CallAfter(self.after_show)
+        return True
 
-        self.statusbar = SplitStatusBar(self)
-        self.SetStatusBar(self.statusbar)
 
-        self.rgbeImg = None
-        self.img = None
-        self.path = ""
-        self.filename = ""
-        self.loadingCanceled = False
-
-        self._ra2tiff = self._searchBinary("ra2tiff")
-        
-        ## show main window
-        self.Size = (800,600)
-        self.Show()
-        
-        ## load image after main window is displayed
-        path,args = self._getPathFromArgs(args)
-        if path != "":
-            self.loadImage(path,args)
-    
+    def after_show(self):
+        """parse cmd line arguments and check for updates"""
+        self.main.process_cmd_line_args()
         ## check updates
-        self.checkAutoUpdate()
+        self.check_auto_update()
 
-
-    def _addFileButtons(self, panel):
-        """create top buttons"""
-        self.loadButton = wx.Button(panel, wx.ID_ANY, label='open HDR')
-        self.loadButton.Bind(wx.EVT_LEFT_DOWN, self.onLoadImage)
-        self.panelSizer.Add(self.loadButton, proportion=0, flag=wx.EXPAND|wx.ALL, border=5 )
-        
-        self.saveButton = wx.Button(panel, wx.ID_ANY, label='save image')
-        self.saveButton.Bind(wx.EVT_LEFT_DOWN, self.onSaveImage)
-        self.saveButton.Disable()
-        self.panelSizer.Add(self.saveButton, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5 )
-        
-        spacepanel = wx.Panel(panel,wx.ID_ANY,size=(-1,5))
-        self.panelSizer.Add(spacepanel, proportion=0, flag=wx.EXPAND)
-
-
-    def _addMenu(self):
-        """add menu to frame (disabled)"""
-        return
-        self.menubar = wx.MenuBar()
-        self.SetMenuBar(self.menubar)
-        self.fileMenu = wx.Menu()
-        self.menubar.Append(self.file, '&File')
-        self.fileOpen = self.file.Append(wx.ID_ANY, '&Open file')
-        self.Bind(wx.EVT_MENU, self.onLoadImage, self.fileOpen)
-
-
-    def checkAutoUpdate(self):
+    
+    def check_auto_update(self):
         """check config for update interval and start UpdateManager"""
         ## get interval (in days) for automatic update check
         interval = 0
@@ -261,13 +213,13 @@ class wxFalsecolorFrame(wx.Frame):
         next_check = last_check + (interval*24*60*60)
         if time.time() > next_check:
             self._log.info("automatic update check (last check: %s)" % last_string)
-            self.checkForUpdate()
+            self.check_for_update()
         else:
             days = (next_check-time.time()) / (24*60*60)
             self._log.debug("next update in %d days" % days)
         
 
-    def checkForUpdate(self, event=None):
+    def check_for_update(self, event=None):
         """start UpdateManager to check google project page for update"""
         UPDATE_URL = "http://code.google.com/p/pyrat/downloads/detail?name=wxfalsecolor.exe"
         self._log.info("check for updates ...")
@@ -277,9 +229,169 @@ class wxFalsecolorFrame(wx.Frame):
         um = UpdateManager(UPDATE_URL, logger=self._log)
         um.setDate(RELEASE_DATE)
         if event or um.updateAvailable():
-            if um.showDialog(self) == True:
+            if um.showDialog(self.main) == True:
                 ## update was successful or skipped by user
                 self._config.set("Update", "last_check_date", time.strftime(DATE_FORMAT))
+
+
+    def exit(self, error=None):
+        """close logger and exit"""
+        if error:
+            self._log.error(str(error))
+        self._config.save_changes()
+        logging.shutdown()
+        self.main.Close()
+
+
+
+
+
+class WxfcOptionParser(FalsecolorOptionParser):
+    """extend option parser class with wxfc specific options"""
+    
+    def __init__(self, logger=None, args=[]):
+        FalsecolorOptionParser.__init__(self, logger, args)
+        
+        ## extend validators
+        self.validators["-nofc"] = ("_NOFC", self._validateTrue, False)
+
+    def get(self, k):
+        """return value of self._settings[k]"""
+        return self._settings.get(k)
+    
+    def get_options_as_args(self):
+        """quick hack to allow passing of options as args list"""
+        args = []
+        for opt,v in self.validators.items():
+            if self._settings.has_key(v[0]):
+                if v[0] in ["redv", "grnv", "bluv"] and "-spec" not in args:
+                    args.append("-spec")
+                elif v[0] == 'docont':
+                    if self._settings[v[0]] == "a":
+                        args.append("-cl")
+                    elif self._settings[v[0]] == "b":
+                        args.append("-cb")
+                else:
+                    args.append(opt)
+                    value = self._settings[v[0]]
+                    if value == True:
+                        pass
+                    else:
+                        args.append(self._value_to_arg(value,v[1]))
+        return args
+
+    def _value_to_arg(self, v, validator):
+        if type(v) == type(""):
+            return v
+        elif validator == self._validateInt:
+            return "%d" % v
+        elif validator == self._validateFloat:
+            s = "%.6f" % v
+            return s.rstrip("0") 
+        elif validator == self._validateScale:
+            s = "%.6f" % v
+            return s.rstrip("0") 
+    
+    def has_fc_option(self):
+        """return True if a falsecolor option is set"""
+        for opt,v in self.validators.items():
+            if opt in ["-d", "-v", "-df", "-i"]:
+                pass
+            elif self._settings.has_key(v[0]):
+                return True
+
+    def has_option(self, k):
+        """check self._settings for option 'k'"""
+        if self._settings.get(k) != None:
+            return True
+
+    def _searchBinary(self, appname):
+        """try to find <appname> in search path"""
+        #XXX unused and better in config?
+        paths = os.environ['PATH']
+        extensions = ['']
+        try:
+            if os.name == 'nt':
+                extensions = os.environ['PATHEXT'].split(os.pathsep)
+            for path in paths.split(os.pathsep):
+                for ext in extensions:
+                    binpath = os.path.join(path,appname) + ext
+                    if os.path.exists(binpath):
+                        return binpath
+        except Exception, err:
+            self._log.exception(err)
+            self._log.error(traceback.format_exc()) 
+            return False
+        ## if nothing was found return False
+        return False
+
+    
+    
+
+
+
+class WxfcFrame(wx.Frame):
+    """main wxfalsecolor frame"""
+
+    def __init__(self, parent, wxapp, logger, config):
+        wx.Frame.__init__(self, parent, title="wxFalsecolor - Radiance Picture Viewer")
+        
+        self._log = logger
+        self.parser = WxfcOptionParser(logger=self._log)
+        self._config = config 
+        self.wxapp = wxapp 
+        self.imagepanel = ImagePanel(self)
+        self.rgbeImg = None
+        self.img = None
+        self.path = ""
+        self.filename = ""
+        self.loadingCanceled = False
+
+        ## layout and show main window
+        self._layout()
+        #TODO: self._addMenu()
+        self.Size = (800,600)
+        self.Show()
+        
+        
+    def process_cmd_line_args(self):
+        """check arguments, load and convert image"""
+        ## check command line args
+        if self.parser.parseOptions(sys.argv[1:]) != True:
+            self.showError(self.parser.error)
+            return
+        ## load image if present
+        if self.parser.has_option('picture'):
+            self.loadImage(self.parser.get('picture'))
+            self.Update()
+        if self.parser.has_fc_option() == True:
+            self.doFalsecolor()
+
+
+    def _addFileButtons(self, panel):
+        """create top buttons"""
+        self.loadButton = wx.Button(panel, wx.ID_ANY, label='open HDR')
+        self.loadButton.Bind(wx.EVT_LEFT_DOWN, self.onLoadImage)
+        self.panelSizer.Add(self.loadButton, proportion=0, flag=wx.EXPAND|wx.ALL, border=5 )
+        
+        self.saveButton = wx.Button(panel, wx.ID_ANY, label='save image')
+        self.saveButton.Bind(wx.EVT_LEFT_DOWN, self.onSaveImage)
+        self.saveButton.Disable()
+        self.panelSizer.Add(self.saveButton, proportion=0, flag=wx.EXPAND|wx.LEFT|wx.RIGHT, border=5 )
+        
+        spacepanel = wx.Panel(panel,wx.ID_ANY,size=(-1,5))
+        self.panelSizer.Add(spacepanel, proportion=0, flag=wx.EXPAND)
+
+
+    def _addMenu(self):
+        """add menu to frame (disabled)"""
+        return
+        self.menubar = wx.MenuBar()
+        self.SetMenuBar(self.menubar)
+        self.fileMenu = wx.Menu()
+        self.menubar.Append(self.file, '&File')
+        self.fileOpen = self.file.Append(wx.ID_ANY, '&Open file')
+        self.Bind(wx.EVT_MENU, self.onLoadImage, self.fileOpen)
 
 
     def _doButtonLayout(self):
@@ -305,10 +417,16 @@ class wxFalsecolorFrame(wx.Frame):
         return panel
 
 
-    def doFalsecolor(self, args):
+    def check_for_update(self, event=None):
+        self.wxapp.check_for_update(event)
+
+
+    def doFalsecolor(self, args=[]):
         """convert Radiance RGBE image to wx.Bitmap"""
         self._log.debug("doFalsecolor(%s)" % str(args))
-        if self.imagepanel.doFalsecolor(args[:]) == True:
+        if not args:
+            args = self.parser.get_options_as_args()
+        if "-nofc" in args or self.imagepanel.doFalsecolor(args[:]) == True:
             self.fccontrols.setFromArgs(args[:]) 
             self.displaycontrols.reset()
             return True
@@ -352,41 +470,6 @@ class wxFalsecolorFrame(wx.Frame):
         return self.lablecontrols.getLableText()
 
 
-    def _getPathFromArgs(self, args):
-        """find input file argument in falsecolor command line"""
-        ## -i <path> is added by loadFile, so remove path and option now
-        path = ""
-        for opt in ["-i", "-ip"]:
-            if opt in args:
-                idx = args.index(opt) + 1
-                if idx == len(args):
-                    self.showError("missing file argument for '%s' option" % opt)
-                    del args[idx-1]
-                else:
-                    path = args[idx]
-                    if not os.path.isfile(path):
-                        self.showError("input file '%s' does not exist" % path)
-                        path = ""
-                    else:
-                        if opt == "-ip":
-                            self._log.info("replacing option '-ip' with '-p' for file '%s'" % path)
-                            args[idx-1] = "-p"
-                        else:
-                            del args[idx-1:idx+1]
-        
-        if path == "":
-            ## check last argument is existing file (drag-n-drop and incorrect use)
-            if len(args) > 0 and os.path.isfile(args[-1]):
-                if len(args) == 1 or args[-2] != '-p':
-                    path = args.pop()
-                else:
-                    self._log.debug("no input file on command line")
-        
-        self._log.info("input file '%s'" % path)
-        self._log.debug("remaining args: %s" % str(args))
-        return (path, args)
-
-
     def getRGBVAt(self, pos):
         """return pixel value at position"""
         if self.rgbeImg:
@@ -402,28 +485,25 @@ class wxFalsecolorFrame(wx.Frame):
         else:
             return (-1,-1,-1,-1)
 
-
-    def _initLog(self):
-        """set up log handler"""
-        logname = sys.argv[0]
-        self._logname = logname
-        log = logging.getLogger(logname)
-        log.setLevel(logging.DEBUG)
-
-        self._logHandler = logging.StreamHandler() #TODO: is this the right choice?
-        self._logHandler.setLevel(logging.WARNING)
-        format = logging.Formatter("[%(levelname)1.1s] %(name)s %(module)s : %(message)s")
-        self._logHandler.setFormatter(format)
-        log.addHandler(self._logHandler)
-        return log
+    
+    def _layout(self):
+        """main layout of controls and image panel"""
+        ## buttons
+        panel = self._doButtonLayout()
+        ## image - buttons layout
+        self.sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.sizer.Add(panel, proportion=0, flag=wx.EXPAND)
+        self.sizer.Add(self.imagepanel, proportion=1, flag=wx.EXPAND)
+        self.SetSizer(self.sizer)
+        ## status bar
+        self.statusbar = SplitStatusBar(self)
+        self.SetStatusBar(self.statusbar)
 
 
     def loadImage(self, path, args=[]):
         """create instance of falsecolor image from <path>"""
-        self._log.debug("loadImage(%s)" % str(args))
-        orig_args=args[:]
+        self._log.info("loadImage(%s)" % path)
         self.reset()
-        self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
         
         self.rgbeImg = RGBEImage(self, self._log, ["-i", path])
         self.rgbeImg.readImageData(path)
@@ -431,34 +511,28 @@ class wxFalsecolorFrame(wx.Frame):
         if self.rgbeImg.error:
             msg = "Error loading image:\n%s" % self.rgbeImg.error
             self.showError(msg)
+            self.rgbeImg = None
+            return False
         else:
             self.setPath(path)
-            self.reset()
             self.saveButton.Enable()
             self._loadImageData()
-        
-        self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
-        
-        ## if there are falsecolor option left convert image
-        if len(orig_args) != 0: 
-            valid = self.rgbeImg.setOptions(orig_args[:])
-            if valid == False:
-                dlg = wx.MessageDialog(self, message=self.rgbeImg.error, caption="Falsecolor Options Error", style=wx.OK|wx.ICON_ERROR)
-                dlg.ShowModal()
-                dlg.Destroy()
-            else:
-                fcargs = orig_args + ["-i", path]
-                if "-s" not in fcargs:
-                    fcargs = ["-s", "auto"] + fcargs
-                self.doFalsecolor(fcargs)
-            
+            self.imagepanel.update(self.rgbeImg)
+            return True
+
 
     def _loadImageData(self):
         """load image data of small images immediately"""
         ## TODO: evaluate image data (exclude fc images)
+        max_size = self._config.getint("lables", "max_data_load", 1000000)
+        if max_size == 0:
+            self._log.info("automatic data loading disabled")
+            self.lablecontrols.reset()
+            return
+
+        ## compare image resolution against max_size
         x,y = self.rgbeImg.getImageResolution()
-        ## TODO: preference setting for max image size
-        if x*y <= 1000000:
+        if x*y <= max_size:
             ## call OnShowValues with fake event
             self.lablecontrols.OnShowValues(-1)
         else:
@@ -536,63 +610,6 @@ class wxFalsecolorFrame(wx.Frame):
                 self.fccontrols.reset("Lux")
 
 
-    def _searchBinary(self, appname):
-        """try to find <appname> in search path"""
-        paths = os.environ['PATH']
-        extensions = ['']
-        try:
-            if os.name == 'nt':
-                extensions = os.environ['PATHEXT'].split(os.pathsep)
-            for path in paths.split(os.pathsep):
-                for ext in extensions:
-                    binpath = os.path.join(path,appname) + ext
-                    if os.path.exists(binpath):
-                        return binpath
-        except Exception, err:
-            self._log.exception(err)
-            self._log.error(traceback.format_exc()) 
-            return False
-        ## if nothing was found return False
-        return False
-
-    
-    def setDebug(self, args):
-        """create and format console log handler"""
-        ## quick fix to remove '-h' option from cmd line
-        if "-h" in args:
-            del args[args.index('-h')]
-        if "-v" in args:
-            self._logHandler.setLevel(logging.INFO)
-            del args[args.index('-v')]
-        if "-d" in args:
-            self._logHandler.setLevel(logging.DEBUG)
-            del args[args.index('-d')]
-        return args
-
-
-    def setDebugFile(self, args):
-        """create and format file log handler"""
-        if "-df" in args:
-            idx = args.index("-df") + 1
-            if idx == len(args):
-                self.exit("missing filename argument for option '-df'")
-            logfile = args[idx]
-            if logfile.startswith("-"):
-                self.exit("log file name can't start with '-' (name='%s')" % logfile)
-            self._setDebugFileHandler(logfile)
-            del args[idx-1:idx+1]
-        return args
-   
-
-    def _setDebugFileHandler(self, logfile):
-        """create and format file log handler"""
-        h = logging.FileHandler(logfile, mode='w')
-        h.setLevel(logging.DEBUG)
-        f = logging.Formatter("[%(levelname)1.1s] %(name)s %(module)s (%(funcName)s) : %(message)s")
-        h.setFormatter(f)
-        self._log.addHandler(h)
-
-
     def setPath(self, path):
         """update frame with new image path"""
         self.path = path
@@ -656,9 +673,8 @@ class wxFalsecolorFrame(wx.Frame):
 
 
 if __name__ == "__main__":   
+    app = WxfcApp(redirect = False)
     try:
-        app = wx.App(redirect = False)
-        frame = wxFalsecolorFrame(sys.argv[1:])
         app.MainLoop()
     except Exception, e:
         logging.exception(e)

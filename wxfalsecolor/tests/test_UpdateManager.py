@@ -36,7 +36,7 @@ class TestDownloadParser:
 class TestUpdateManager:
 
     def __init__(self):
-        if os.name == 'nt'
+        if os.name == 'nt':
             self.fileurl = "file:///%s" % os.path.abspath(URL_TESTFILE)
         else:
             self.fileurl = "file://%s" % os.path.abspath(URL_TESTFILE)

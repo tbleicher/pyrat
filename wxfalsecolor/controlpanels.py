@@ -608,9 +608,9 @@ class MiscControlPanel(wx.Panel):
         """create buttons for various functions"""
         sizer = wx.BoxSizer(wx.VERTICAL)
         
-        buttons = [("show header", self.wxapp.showHeaders,     20),
-                ("check update",   self.wxapp.checkForUpdate,  10), 
-                ("about",          self.wxapp.showAboutDialog, 5)]
+        buttons = [("show header", self.wxapp.showHeaders,      20),
+                ("check update",   self.wxapp.check_for_update, 10), 
+                ("about",          self.wxapp.showAboutDialog,  5)]
         
         ## create buttons and spacers
         for label, func, space in buttons:
