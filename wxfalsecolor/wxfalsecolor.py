@@ -555,6 +555,8 @@ class WxfcFrame(wx.Frame):
         """action on click on imagepanel"""
         if self.imagepanel.hasLables():
             self.lablecontrols.loadClearButton.Enable()
+        elif self.lablecontrols.loadClearButton.GetLabelText() == "load data":
+            self.lablecontrols.loadClearButton.Enable()
         else:
             self.lablecontrols.loadClearButton.Disable()
 
