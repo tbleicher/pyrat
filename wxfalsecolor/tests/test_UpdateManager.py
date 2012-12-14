@@ -1,4 +1,6 @@
 from updatemanager import *
+import mock
+import urllib2
 
 
 URL_TESTFILE = "./tests/data/code.google.html"
@@ -61,6 +63,26 @@ class TestUpdateManager:
         ## date of 0.4alpha is Jul 20 2010
         um.setDate("Wed Jul 20 12:00:00 2010")
         assert um.updateAvailable() == True
+
+    def test_getDownloadPage_success(self):
+        um = UpdateManager(self.fileurl)
+        assert um.getDownloadPage() == True
+        assert um.text == file(URL_TESTFILE).read()
+
+    @mock.patch("urllib2.urlopen") 
+    def test_getDownloadPage_HTTPError(self, urlopen):
+        urlopen.side_effect = urllib2.HTTPError(self.fileurl, 404, "test", {}, file(URL_TESTFILE))
+        um = UpdateManager(self.fileurl)
+        assert um.getDownloadPage() == False
+        assert um.text == ""
+    
+    @mock.patch("urllib2.urlopen") 
+    def test_getDownloadPage_URLError(self, urlopen):
+        urlopen.side_effect = urllib2.URLError((404, "test"))
+        um = UpdateManager(self.fileurl)
+        assert um.getDownloadPage() == False
+        assert um.text == ""
+       
 
 
 

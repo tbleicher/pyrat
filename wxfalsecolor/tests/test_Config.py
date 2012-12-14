@@ -1,4 +1,5 @@
 import os
+import mock
 from config import WxfcConfig
 
 
@@ -6,12 +7,17 @@ class TestWxfcConfig(object):
     
     def setUp(self):
 	self.config = WxfcConfig()
-
-    def test_default_path(self):
-	if os.name == 'nt':
-	    path = os.path.join(os.environ["APPDATA"], "falsecolor2", "wxfalsecolor.cfg")
-	else:
-	    path = os.path.join(os.environ["HOME"], ".falsecolor2", "wxfalsecolor.cfg")
+        
+    @mock.patch("os.name", 'nt')
+    @mock.patch("os.environ", {"APPDATA": "C:/Users/doe"}) 
+    def test_default_path_nt(self):
+	path = os.path.join(os.environ["APPDATA"], "falsecolor2", "wxfalsecolor.cfg")
+	print "path=", path
+	print "dflt=", self.config.get_filepath()
+	assert self.config.get_filepath() == path
+    
+    def test_default_path_unix(self):
+	path = os.path.join(os.environ["HOME"], ".falsecolor2", "wxfalsecolor.cfg")
 	print "path=", path
 	print "dflt=", self.config.get_filepath()
 	assert self.config.get_filepath() == path
