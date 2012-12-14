@@ -408,11 +408,11 @@ class UpdateManager(object):
             return True
         except urllib2.HTTPError, err:
             self.error = str(err)
-            self._log.error("urlopen() failed: '%s'" % self.error.args[0])
+            self._log.error("urlopen() failed: '%s'" error.args[0])
             return False
         except urllib2.URLError, err:
             self.error = err.reason
-            self._log.error("urlopen() failed: '%s'" % self.error.args[0])
+            self._log.error("urlopen() failed: '%s'" error.args[0])
             return False
 
 
