@@ -7,6 +7,9 @@
 import os
 import wx
 import wx.lib.foldpanelbar as fpb
+# work around for bug in some new wxPython versions
+if not 'FPB_DEFAULT_STYLE' in dir(fpb):
+    fpb.FPB_DEFAULT_STYLE = fpb.FPB_VERTICAL
 import wx.lib.buttons as buttons
 
 

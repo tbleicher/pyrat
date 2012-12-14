@@ -167,9 +167,13 @@ class RGBEImage(FalsecolorImage):
             (keepGoing, foo) = dlg.Update(i+1, "reading %s channel ..." % {'r':'red','g':'green','b':'blue'}[c])
             if keepGoing == False:
                 return self.cancelLoading(dlg, wxparent)
-            
+ 
             cmd = "pvalue -o -dd -h -H -p%s" % c.upper()
-            data = self._popenPipeCmd(cmd, self._input)
+            try:
+                data = self._popenPipeCmd(cmd, self._input)
+            except Exception as strerror:
+                self.error = strerror
+
             if self.error:
                 self._readArrayError(dlg, "Error reading pixel values:\n%s" % self.error)
                 return False
@@ -280,9 +284,9 @@ class RGBEImage(FalsecolorImage):
 
     def setOptions(self, args):
         """strip '-nofc' from cmd line args"""
+        args = args[:]
         if '-nofc' in args:
             print "removing '-nofc'"
-            args = args[:]
             del args[args.index('-nofc')]
         FalsecolorImage.setOptions(self, args)
 

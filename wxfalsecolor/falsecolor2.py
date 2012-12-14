@@ -90,6 +90,25 @@ ba = bi(nfiles);
 
 """
 
+def findBinaryInPath(app, binpath=""):
+    """search for app in system search path"""
+    paths = os.environ["PATH"]
+    if binpath != "":
+        paths = os.pathsep.join(binpath, paths)
+    paths = paths.split(os.pathsep)
+    if os.environ.has_key("PATHEXT"):
+        pathext = os.pathsep.join("", os.environ["PATHEXT"])
+        pathext = pathext.split(os.pathsep)
+    else:
+        pathext = [":"]
+    for e in pathext:
+        prog = app + e
+        for path in paths:
+            if os.path.exists(os.path.join(path,prog)):
+                return True
+    return False
+
+
 def showHelp():
     """show usage message"""
     options = [("-h", "", "write this help message to STDOUT\nBe careful with output redirection!"),
@@ -259,20 +278,28 @@ class FalsecolorBase:
     def _popenPipeCmd(self, cmd, data_in, data_out=PIPE):
         """pass <data_in> to process <cmd> and return results"""
         ## convert cmd to (non-unicode?) string for subprocess
-	cmd = str(cmd)
-        self._log.debug("cmd= %s" % str(shlex.split(cmd)))
+        cmd = str(cmd)
+        cmdargs = shlex.split(cmd)
+        self._log.debug("cmd= %s" % str(cmdargs))
+        if not findBinaryInPath(cmdargs[0]):
+            raise Exception("command not found in search path: '%s'" % cmdargs[0])
+        
         if data_in:
             self._log.debug("data_in= %d bytes" % len(data_in))
-	p = Popen(shlex.split(cmd), bufsize=-1, stdin=PIPE, stdout=data_out, stderr=PIPE)
-        data, err = p.communicate(data_in)
+        try:
+            p = Popen(shlex.split(cmd), bufsize=-1, stdin=PIPE, stdout=data_out, stderr=PIPE)
+            data, err = p.communicate(data_in)
+        except OSError as strerror:
+            raise OSError(strerror)
+        except:
+            raise Exception("unexpected error reading from pipe")
 	
         if err:
             self.error = err.strip()
-            raise Exception, err.strip()
+            raise Exception(err.strip())
         if data:
             self._log.debug("data_out= %d bytes" % len(data))
             return data
-
 
 
 

@@ -274,7 +274,7 @@ class WxfcOptionParser(FalsecolorOptionParser):
                 else:
                     args.append(opt)
                     value = self._settings[v[0]]
-                    if value == True:
+                    if value is True:
                         pass
                     else:
                         args.append(self._value_to_arg(value,v[1]))
