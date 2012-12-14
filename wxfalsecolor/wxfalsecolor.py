@@ -5,8 +5,8 @@
 ## $Id$
 ## $URL$
 
-VERSION=0.5
-RELEASE_DATE = "Thu Jan 12 12:29:20 2011"
+VERSION=0.51
+RELEASE_DATE = "Thu Dec 13 23:30:20 2012"
 
 LICENSE="""Copyright 2010 Thomas Bleicher. All rights reserved.
 
