@@ -97,7 +97,7 @@ def findBinaryInPath(app, binpath=""):
         paths = os.pathsep.join(binpath, paths)
     paths = paths.split(os.pathsep)
     if os.environ.has_key("PATHEXT"):
-        pathext = os.pathsep.join("", os.environ["PATHEXT"])
+        pathext = os.pathsep.join(["", os.environ["PATHEXT"]])
         pathext = pathext.split(os.pathsep)
     else:
         pathext = [":"]
