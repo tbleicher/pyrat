@@ -289,7 +289,7 @@ class FalsecolorBase:
         try:
             p = Popen(shlex.split(cmd), bufsize=-1, stdin=PIPE, stdout=data_out, stderr=PIPE)
             data, err = p.communicate(data_in)
-        except OSError as strerror:
+        except OSError, strerror:
             raise OSError(strerror)
         except:
             raise Exception("unexpected error reading from pipe")

@@ -406,11 +406,11 @@ class UpdateManager(object):
             self._log.debug("urlopen() read %d bytes from '%s'" % (len(self.text), self.url))
             page.close()
             return True
-        except urllib2.HTTPErr asr, err:
+        except urllib2.HTTPErr,r, err:
             self.error = str(err)
             self._log.error("urlopen() failedServer responded with error code %d" % err.code)
             return False
-        except urllib2.URLError as err:
+        except urllib2.URLError, err:
             self.error = "URLError: %s" % str(err.reason)
             self._log.error("urlopen() failed: '%s'" % str(err.reason)0])
             return False

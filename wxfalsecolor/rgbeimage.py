@@ -171,7 +171,7 @@ class RGBEImage(FalsecolorImage):
             cmd = "pvalue -o -dd -h -H -p%s" % c.upper()
             try:
                 data = self._popenPipeCmd(cmd, self._input)
-            except Exception as strerror:
+            except Exception, strerror:
                 self.error = strerror
 
             if self.error:
