@@ -302,7 +302,7 @@ class UpdateDetailsDialog(wx.Dialog):
         sizer.Fit(self) 
     
     
-    de_description_panel(self, text, width=350):
+    def description_panel(self, text, width=350):
         """return scrolled panel for description text"""
         scr_panel = scrolled.ScrolledPanel(self, wx.ID_ANY, size=(width,200))
         scr_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -319,9 +319,9 @@ class UpdateDetailsDialog(wx.Dialog):
         sizer = wx.BoxSizer(wx.VERTICAL)
         
         ## title
-        label = wx.StaticText(self, -1
-		"Update available for %s" % details.get("filename", "wxfalsecolor.exe")e")
-        fondflt = label.GetFont()
+        label = wx.StaticText(self, -1,
+		"Update available for %s" % details.get("filename", "wxfalsecolor.exe"))
+        font_dflt = label.GetFont()
         font_big = wx.Font(font_dflt.GetPointSize()+2,
                 font_dflt.GetFamily(),
                 font_dflt.GetStyle(),
@@ -406,13 +406,13 @@ class UpdateManager(object):
             self._log.debug("urlopen() read %d bytes from '%s'" % (len(self.text), self.url))
             page.close()
             return True
-        except urllib2.HTTPErr,r, err:
+        except urllib2.HTTPError, err:
             self.error = str(err)
             self._log.error("urlopen() failedServer responded with error code %d" % err.code)
             return False
         except urllib2.URLError, err:
             self.error = "URLError: %s" % str(err.reason)
-            self._log.error("urlopen() failed: '%s'" % str(err.reason)0])
+            self._log.error("urlopen() failed: '%s'" % str(err.reason))
             return False
 
 
@@ -460,7 +460,7 @@ class UpdateManager(object):
             return False
         else:
             self._log.info("no update available")
-            self._showInfoDialogno update", "No new updates available.\n "Try again in a few weeks.")
+            self._showInfoDialog("no update", "No new updates available.\nTry again in a few weeks.")
             return True
 
 
